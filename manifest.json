@@ -1,15 +1,26 @@
-{
-  "name": "Fundida App",
-  "short_name": "Fundida",
-  "start_url": "./index.html",
-  "display": "standalone",
-  "background_color": "#4A148C",
-  "theme_color": "#4A148C",
-  "icons": [
-    {
-      "src": "icono.png",
-      "sizes": "512x512",
-      "type": "image/png"
-    }
-  ]
-}
+// Tu imagen del fileteado en Base64
+  const iconUrl = 'data:image/png;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1BST0ZJTEUAAQEAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAACRyWFlaAAABFAAAABRnWFlaAAABKAAAABRiWFlaAAABPAAAABR3dHB0AAABUAAAABRyVFJDAAABZAAAAChnVFJDAAABZAAAAChiVFJDAAABZAAAAChjcHJ0AAABjAAAADxtbHVjAAAAAAAAAAEAAAAMZW5VU...'; // (Dejá todo el código largo que ya tenías acá adentro)
+
+  // NUEVO MANIFIESTO
+  const manifest = {
+    "name": "Fundida App",
+    "short_name": "Fundida",
+    "start_url": "./index.html",
+    "display": "standalone",
+    "background_color": "#111625",
+    "theme_color": "#6C63FF",
+    "icons": [
+      {
+        "src": iconUrl,
+        "sizes": "512x512",
+        "type": "image/png",
+        "purpose": "any maskable"
+      }
+    ]
+  };
+
+  // Esto inyecta el manifiesto de forma segura sin servidores
+  const manifestBlob = new Blob([JSON.stringify(manifest)], {type: 'application/json'});
+  document.getElementById('manifestLink').href = URL.createObjectURL(manifestBlob);
+})();
+</script>
