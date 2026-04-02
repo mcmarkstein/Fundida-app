@@ -20,8 +20,3 @@
   ]
 }
 
-  // Esto inyecta el manifiesto de forma segura sin servidores
-  const manifestBlob = new Blob([JSON.stringify(manifest)], {type: 'application/json'});
-  document.getElementById('manifestLink').href = URL.createObjectURL(manifestBlob);
-})();
-</script>
