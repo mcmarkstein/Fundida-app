@@ -310,11 +310,6 @@ body {
 </style>
 </head>
   <link rel="manifest" href="./manifest.json">
-<script>
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('./sw.js');
-  }
-</script>
 <body>
 
 <!-- TOP HEADER -->
@@ -1587,6 +1582,14 @@ loadState();
 updateAll();
 fetchMEP();
 setInterval(fetchMEP, 5*60*1000);
+// REGISTRO DEL SERVICE WORKER
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js')
+      .then(reg => console.log('Service Worker registrado con éxito', reg))
+      .catch(err => console.error('Error al registrar el Service Worker', err));
+  });
+}
 </script>
 </body>
 </html>
