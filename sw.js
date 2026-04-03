@@ -1,8 +1,10 @@
 
-const CACHE_NAME = 'fundida-app-cache-v1';
+const CACHE_NAME = 'fundida-app-cache-v2';
 const urlsToCache = [
   './',
-  './index.html'
+  './index.html',
+  './manifest.json',
+  './icono_app.png'
 ];
 
 // Instalar el service worker y cachear el contenido básico
