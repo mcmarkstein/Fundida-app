@@ -349,6 +349,40 @@ body {
 .rec-status-badge.due{background:#FFF0F3;color:var(--expense);}
 .rec-status-badge.ok{background:#E6FDF5;color:var(--income);}
 .rec-status-badge.upcoming{background:#EEF2FF;color:var(--accent);}
+/* ── INVERSIONES ── */
+.wsw{display:flex;background:var(--white);border-radius:14px;padding:3px;gap:3px;margin:13px 13px 0;box-shadow:var(--shadow);}
+.wsw-btn{flex:1;text-align:center;padding:9px;border-radius:11px;font-weight:700;font-size:12px;cursor:pointer;color:var(--text2);transition:all .18s;}
+.wsw-btn.active{background:var(--accent);color:#fff;}
+.inv-hero{background:linear-gradient(135deg,#6C63FF 0%,#00B4D8 100%);margin:11px 13px 0;border-radius:20px;padding:18px;color:#fff;box-shadow:0 8px 26px rgba(108,99,255,.22);}
+.inv-hero-label{font-size:10px;font-weight:600;opacity:.7;letter-spacing:1px;margin-bottom:3px;}
+.inv-hero-amount{font-size:32px;font-weight:800;letter-spacing:-.5px;}
+.inv-hero-row{display:flex;gap:18px;margin-top:10px;flex-wrap:wrap;}
+.inv-hero-row small{display:block;font-size:9px;opacity:.7;font-weight:600;letter-spacing:.8px;}
+.inv-hero-row b{font-size:13px;font-weight:800;}
+.inv-plat{display:flex;justify-content:space-between;align-items:baseline;margin:14px 2px 7px;}
+.inv-plat-name{font-size:12px;font-weight:800;}
+.inv-plat-tot{font-size:11px;font-weight:700;color:var(--text2);}
+.inv-row{background:var(--white);border-radius:15px;padding:11px 12px;margin-bottom:7px;box-shadow:var(--shadow);display:flex;align-items:center;gap:10px;cursor:pointer;}
+.inv-ico{width:38px;height:38px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;}
+.inv-info{flex:1;min-width:0;}
+.inv-name{font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.inv-sub{font-size:9px;color:var(--text2);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.inv-val{text-align:right;flex-shrink:0;}
+.inv-val b{font-size:12px;font-weight:800;display:block;margin-bottom:2px;}
+.inv-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;}
+.inv-stat{background:var(--bg);border-radius:12px;padding:10px 12px;}
+.inv-stat small{display:block;font-size:9px;font-weight:800;color:var(--text2);letter-spacing:.8px;text-transform:uppercase;}
+.inv-stat b{font-size:14px;font-weight:800;}
+.inv-up{color:var(--income);}
+.inv-down{color:var(--expense);}
+.inv-act-row{display:flex;gap:7px;margin-bottom:12px;}
+.inv-act{flex:1;padding:10px 4px;background:rgba(108,99,255,.08);border:none;border-radius:12px;color:var(--accent);font-size:11px;font-weight:800;cursor:pointer;font-family:'Poppins',sans-serif;}
+.inv-hist-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);font-size:11px;}
+.inv-hist-row:last-child{border-bottom:none;}
+.inv-bulk-row{display:flex;align-items:center;gap:10px;padding:6px 0;}
+.chk-row{display:flex;gap:9px;align-items:flex-start;background:var(--bg);border-radius:11px;padding:10px 12px;font-size:11px;color:var(--text2);line-height:1.5;margin-bottom:12px;}
+.chk-row input{margin-top:3px;flex-shrink:0;}
+.type-btn.ie.active{background:rgba(108,99,255,.12);color:var(--accent);}
 </style>
 </head>
 <body>
@@ -504,9 +538,15 @@ body {
 
   <!-- ── PAGE: RIQUEZA ── -->
   <div class="page" id="pageWealth">
+    <div class="wsw">
+      <div class="wsw-btn active" id="wswMain" onclick="setWealthView('main')">💰 Patrimonio</div>
+      <div class="wsw-btn" id="wswInv" onclick="setWealthView('inv')">📈 Inversiones</div>
+    </div>
+    <div id="wealthMainView">
     <div class="wealth-hero">
       <div class="wealth-label">PATRIMONIO TOTAL</div>
       <div class="wealth-amount" id="wealthAmount">$ 0</div>
+      <div id="wealthBreakdown" style="font-size:10px;opacity:.9;margin-top:5px;font-weight:600;"></div>
     </div>
     <div class="summary-section" style="margin-top:11px;">
       <!-- Evolución con selector de zoom -->
@@ -549,6 +589,31 @@ body {
           <thead><tr><th>AÑO / MES</th><th>INGRESOS</th><th>GASTOS</th><th>NETO</th></tr></thead>
           <tbody id="cfTableBody"></tbody>
         </table>
+      </div>
+    </div>
+    </div><!-- /wealthMainView -->
+    <div id="wealthInvView" style="display:none;">
+      <div class="inv-hero">
+        <div class="inv-hero-label">MIS INVERSIONES</div>
+        <div class="inv-hero-amount" id="invTotal">$ 0</div>
+        <div class="inv-hero-row">
+          <div><small>INVERTIDO</small><b id="invInvested">–</b></div>
+          <div><small>GANANCIA</small><b id="invGain">–</b></div>
+          <div><small>RENDIMIENTO</small><b id="invPct">–</b></div>
+        </div>
+      </div>
+      <div class="summary-section" style="margin-top:11px;">
+        <div class="card" id="invDonutCard">
+          <div class="card-title">Distribución</div>
+          <div class="card-subtitle">Por tipo de inversión</div>
+          <div class="donut-wrap">
+            <canvas class="donut-canvas" id="chartInvType" width="115" height="115"></canvas>
+            <div class="donut-legend" id="invTypeLegend"></div>
+          </div>
+        </div>
+        <button class="btn-secondary" id="invBulkBtn" onclick="openInvBulk()" style="margin-bottom:4px;">🔄 Actualizar valores de todas</button>
+        <div id="invList"></div>
+        <button class="btn-add-budget" onclick="openInvModal()" style="width:100%;margin:12px 0 13px;">＋ Agregar inversión</button>
       </div>
     </div>
   </div>
@@ -942,11 +1007,135 @@ body {
       <div style="display:flex;flex-direction:column;gap:8px;">
         <button class="btn-primary" onclick="openImportSheet()">📥 Importar desde Excel / CSV</button>
         <button class="btn-primary" style="background:linear-gradient(135deg,#0DC98A,#00B4D8);" onclick="exportData()">📤 Exportar mis datos (CSV)</button>
+        <button class="btn-primary" style="background:linear-gradient(135deg,#6C63FF,#00B4D8);" onclick="document.getElementById('invImportFile').click()">📈 Importar inversiones (JSON)</button>
+        <input type="file" id="invImportFile" accept=".json,application/json" style="display:none;" onchange="importInvestmentsFile(event)">
+        <button class="btn-primary" style="background:linear-gradient(135deg,#00B4D8,#0DC98A);" onclick="exportInvestments()">📈 Exportar inversiones (JSON)</button>
         <button class="btn-primary" style="background:linear-gradient(135deg,#6B7280,#9CA3AF);" onclick="downloadTemplate()">📋 Descargar plantilla Excel</button>
         <button class="btn-primary" style="background:linear-gradient(135deg,#FF9F43,#FF6B6B);margin-top:4px;" onclick="loadDemo();closeSettings()">📦 Cargar datos de demo</button>
         <button class="btn-secondary" onclick="clearAll()">🗑️ Borrar todos los datos</button>
       </div>
       <div style="height:8px;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SHEET: INVERSIÓN (nueva / editar) ═══ -->
+<div class="sheet-overlay" id="invOverlay" onclick="if(event.target===this)closeInvModal()">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title" id="invModalTitle">Nueva inversión</div>
+    <div class="sheet-body">
+      <div class="form-group">
+        <label class="form-label">Nombre</label>
+        <input class="form-control" type="text" id="invName" placeholder="Ej: VOO, Fima ahorro pesos, CS47D">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Plataforma</label>
+          <input class="form-control" type="text" id="invPlatform" list="invPlatList" placeholder="IOL, Galicia…">
+          <datalist id="invPlatList"></datalist>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Moneda</label>
+          <select class="form-control" id="invCurrency">
+            <option value="ARS">ARS 🇦🇷</option>
+            <option value="USD">USD 🇺🇸</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Tipo</label>
+        <select class="form-control" id="invType" onchange="invTypeChanged()"></select>
+      </div>
+      <div id="invNewFields">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Monto invertido</label>
+            <input class="form-control" type="number" inputmode="decimal" step="any" min="0" id="invInit" placeholder="0">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Valor actual</label>
+            <input class="form-control" type="number" inputmode="decimal" step="any" min="0" id="invInitVal" placeholder="Igual al invertido">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Fecha</label>
+          <input class="form-control" type="date" id="invInitDate">
+        </div>
+        <div class="chk-row">
+          <input type="checkbox" id="invInitTx">
+          <label for="invInitTx">Descontarlo de mi dinero (registra un gasto «Inversión»). Dejalo sin marcar si ya lo tenías invertido antes de usar la app.</label>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group" id="invVencGroup" style="display:none;">
+          <label class="form-label">Vencimiento</label>
+          <input class="form-control" type="date" id="invVenc">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Objetivo % (opcional)</label>
+          <input class="form-control" type="number" inputmode="decimal" step="any" min="0" max="100" id="invTarget" placeholder="Ej: 12">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notas</label>
+        <input class="form-control" type="text" id="invNotes" placeholder="Opcional">
+      </div>
+      <button class="btn-primary" onclick="saveInv()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SHEET: APORTE / RETIRO / VALOR ═══ -->
+<div class="sheet-overlay" id="invEntryOverlay" onclick="if(event.target===this)closeInvEntry()">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title" id="invEntryTitle">Movimiento</div>
+    <div class="sheet-body">
+      <div class="type-toggle">
+        <div class="type-btn ie" id="ieAporte" onclick="setInvEntryKind('aporte')">➕ Aporte</div>
+        <div class="type-btn ie" id="ieRetiro" onclick="setInvEntryKind('retiro')">➖ Retiro</div>
+        <div class="type-btn ie" id="ieValor" onclick="setInvEntryKind('valor')">📊 Valor</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label" id="invEntryAmtLabel">Monto</label>
+        <input class="form-control" type="number" inputmode="decimal" step="any" min="0" id="invEntryAmt" placeholder="0">
+        <div id="invEntryHint" style="font-size:10px;color:var(--text2);margin-top:5px;line-height:1.5;"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Fecha</label>
+        <input class="form-control" type="date" id="invEntryDate">
+      </div>
+      <div class="chk-row" id="invEntryTxRow">
+        <input type="checkbox" id="invEntryTx" checked>
+        <label for="invEntryTx" id="invEntryTxLabel"></label>
+      </div>
+      <button class="btn-primary" onclick="saveInvEntry()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SHEET: DETALLE DE INVERSIÓN ═══ -->
+<div class="sheet-overlay" id="invDetailOverlay" onclick="if(event.target===this)closeInvDetail()">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-body" id="invDetailBody"></div>
+  </div>
+</div>
+
+<!-- ═══ SHEET: ACTUALIZAR VALORES ═══ -->
+<div class="sheet-overlay" id="invBulkOverlay" onclick="if(event.target===this)closeInvBulk()">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">Actualizar valores</div>
+    <div class="sheet-body">
+      <div style="font-size:11px;color:var(--text2);line-height:1.6;margin-bottom:10px;">Cargá cuánto vale hoy cada inversión. Las que dejes vacías no cambian.</div>
+      <div class="form-group">
+        <label class="form-label">Fecha del control</label>
+        <input class="form-control" type="date" id="invBulkDate">
+      </div>
+      <div id="invBulkBody"></div>
+      <button class="btn-primary" onclick="saveInvBulk()">Guardar valores</button>
     </div>
   </div>
 </div>
@@ -994,7 +1183,7 @@ const BUDGET_COLORS=['#6C63FF','#0DC98A','#FF4D6D','#F59E0B','#00B4D8','#A855F7'
 // STATE
 // ══════════════════════════════════════════
 let state={
-  transactions:[],budgets:[],recurring:[],
+  transactions:[],budgets:[],recurring:[],investments:[],
   categories:JSON.parse(JSON.stringify(DEFAULT_CATS)),
   tags:['personal','familia','trabajo','fijo','variable','deducible','urgente'],
   mepRate:1200,displayCurrency:'ARS',
@@ -1008,6 +1197,7 @@ let deferredInstallPrompt=null;
 
 function loadState(){
   try{const s=localStorage.getItem('fundida_v4');if(s)state={...state,...JSON.parse(s)};}catch(e){}
+  if(!Array.isArray(state.investments))state.investments=[];
 }
 function saveState(){try{localStorage.setItem('fundida_v4',JSON.stringify(state));}catch(e){}}
 
@@ -1515,9 +1705,21 @@ function smartYTick(v, dc){
 function updateWealth(){
   const dc=state.displayCurrency;
   const txs=[...state.transactions].sort((a,b)=>a.date.localeCompare(b.date));
-  let cum=0; const allPts=[];
-  txs.forEach(tx=>{const v=toDisp(tx.amount,tx.currency);cum+=tx.type==='income'?v:-v;allPts.push({x:tx.date,y:cum});});
+  const hs=state.investments||[];
+  let cashTotal=0;const cashAt={};
+  txs.forEach(tx=>{const v=toDisp(tx.amount,tx.currency);cashTotal+=tx.type==='income'?v:-v;cashAt[tx.date]=cashTotal;});
+  const dateSet=new Set(Object.keys(cashAt));
+  hs.forEach(h=>(h.entries||[]).forEach(e=>{if(e&&e.date)dateSet.add(e.date);}));
+  const invNow=hs.reduce((a,h)=>a+toDisp(invStats(h).current,h.currency),0);
+  let cash=0;const allPts=[];
+  [...dateSet].sort().forEach(d=>{
+    if(cashAt[d]!==undefined)cash=cashAt[d];
+    const iv=hs.reduce((a,h)=>a+toDisp(invStats(h,d).current,h.currency),0);
+    allPts.push({x:d,y:cash+iv});
+  });
+  const cum=cashTotal+invNow;
   document.getElementById('wealthAmount').textContent=fmt(cum,dc);
+  document.getElementById('wealthBreakdown').textContent=hs.length?`Dinero: ${fmt(cashTotal,dc)} · Inversiones: ${fmt(invNow,dc)}`:'';
 
   // Filter by zoom
   const pts = filterPtsByZoom(allPts);
@@ -1759,7 +1961,7 @@ function loadDemo(){
   state.transactions.push(...demo);state.transactions.sort((a,b)=>b.date.localeCompare(a.date));
   saveState();updateAll();
 }
-function clearAll(){if(!confirm('¿Borrar todos los datos? Esta acción no se puede deshacer.'))return;state.transactions=[];state.budgets=[];saveState();updateAll();}
+function clearAll(){if(!confirm('¿Borrar todos los datos (movimientos, presupuestos e inversiones)? Esta acción no se puede deshacer.'))return;state.transactions=[];state.budgets=[];state.investments=[];saveState();updateAll();}
 
 // ══════════════════════════════════════════
 // UPDATE ALL
@@ -1769,7 +1971,7 @@ function updateAll(){
   if(contentTab==='summary')renderSummaryCharts();
   if(contentTab==='recurring')renderRecurring();
   if(currentPage==='budgets')renderBudgets();
-  if(currentPage==='wealth')updateWealth();
+  if(currentPage==='wealth'){updateWealth();if(wealthView==='inv')renderInvestments();}
 }
 
 // ══════════════════════════════════════════
@@ -2256,6 +2458,371 @@ function registerNow(id){
   });
   state.transactions.sort((a,b)=>b.date.localeCompare(a.date));
   saveState();renderRecurring();updateAll();
+}
+
+
+// ══════════════════════════════════════════
+// INVERSIONES
+// Cada inversión (FCI, ETF, acción, ON…) guarda movimientos:
+//   aporte (+) · retiro (–) · valor (cuánto vale hoy en total)
+// invertido = aportes – retiros · valor actual = último "valor" + aportes posteriores
+// ══════════════════════════════════════════
+const INV_TYPES={
+  fci:   {name:'FCI',               emoji:'🏦',color:'#6C63FF'},
+  etf:   {name:'ETF',               emoji:'📊',color:'#0DC98A'},
+  accion:{name:'Acción / CEDEAR',   emoji:'📈',color:'#00B4D8'},
+  on:    {name:'Oblig. negociable', emoji:'📜',color:'#F59E0B'},
+  bono:  {name:'Bono / Letra',      emoji:'🧾',color:'#EC4899'},
+  plazo: {name:'Plazo fijo',        emoji:'⏳',color:'#14B8A6'},
+  usd:   {name:'Dólares',           emoji:'💵',color:'#3B82F6'},
+  cripto:{name:'Cripto',            emoji:'🪙',color:'#FF8C42'},
+  otro:  {name:'Otro',              emoji:'📦',color:'#94A3B8'},
+};
+let wealthView='main',invDetailId=null,invEditId=null,invEntryKind='aporte',invEntryHid=null;
+
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function invNewId(){return 'i'+Date.now().toString(36)+Math.random().toString(36).slice(2,8);}
+function invToday(){return new Date().toISOString().split('T')[0];}
+function invGet(id){return (state.investments||[]).find(h=>h.id===id);}
+function invNum(n){return Math.round((n+Number.EPSILON)*100)/100;}
+function fmtDate(d){if(!d)return'';const[y,m,dd]=d.split('-');return `${dd}/${m}/${y}`;}
+
+function invSorted(h){
+  return (h.entries||[]).filter(e=>e&&e.date).map((e,i)=>({...e,_i:i}))
+    .sort((a,b)=>a.date.localeCompare(b.date)||a._i-b._i);
+}
+// asOf (YYYY-MM-DD) opcional: calcula como estaba esa fecha
+function invStats(h,asOf){
+  let invested=0,lastVal=null,lastValDate=null,after=0;
+  invSorted(h).forEach(e=>{
+    if(asOf&&e.date>asOf)return;
+    if(e.kind==='aporte'){invested+=e.amount;after+=e.amount;}
+    else if(e.kind==='retiro'){invested-=e.amount;after-=e.amount;}
+    else if(e.kind==='valor'){lastVal=e.amount;lastValDate=e.date;after=0;}
+  });
+  const current=lastVal===null?invested:lastVal+after;
+  const gain=current-invested;
+  return {invested,current,gain,pct:invested>0?gain/invested*100:null,lastValDate};
+}
+// Rendimiento de cada control: (saldo – saldo anterior – aportes) / saldo anterior
+function invRendimientos(h){
+  const byEntry={};let prev=null,net=0,comp=1,n=0;
+  invSorted(h).forEach(e=>{
+    if(e.kind==='aporte')net+=e.amount;
+    else if(e.kind==='retiro')net-=e.amount;
+    else if(e.kind==='valor'){
+      if(prev!==null&&prev>0){const r=(e.amount-prev-net)/prev;byEntry[e.id]=r*100;comp*=1+r;n++;}
+      prev=e.amount;net=0;
+    }
+  });
+  return {byEntry,compound:n>0?(comp-1)*100:null,periods:n};
+}
+function invPctTxt(p,dec){if(p===null||p===undefined||!isFinite(p))return'–';return (p>=0?'+':'')+p.toFixed(dec===undefined?1:dec)+'%';}
+
+// ── Vista Patrimonio / Inversiones ──
+function setWealthView(v){
+  wealthView=v;
+  document.getElementById('wswMain').classList.toggle('active',v==='main');
+  document.getElementById('wswInv').classList.toggle('active',v==='inv');
+  document.getElementById('wealthMainView').style.display=v==='main'?'block':'none';
+  document.getElementById('wealthInvView').style.display=v==='inv'?'block':'none';
+  updateAll();
+}
+
+function renderInvestments(){
+  const dc=state.displayCurrency,hs=state.investments||[];
+  let tot=0,inv=0;const byType={},byPlat={};
+  hs.forEach(h=>{
+    const s=invStats(h),c=toDisp(s.current,h.currency),i=toDisp(s.invested,h.currency);
+    tot+=c;inv+=i;byType[h.type]=(byType[h.type]||0)+c;
+    const p=(h.platform||'').trim()||'Sin plataforma';
+    (byPlat[p]=byPlat[p]||[]).push({h,s,c});
+  });
+  const gain=tot-inv,pct=inv>0?gain/inv*100:null;
+  document.getElementById('invTotal').textContent=fmt(tot,dc);
+  document.getElementById('invInvested').textContent=fmt(inv,dc);
+  document.getElementById('invGain').textContent=hs.length?fmtS(gain,dc):'–';
+  document.getElementById('invPct').textContent=invPctTxt(pct);
+
+  // Dona por tipo
+  destroyChart('chartInvType');
+  const types=Object.entries(byType).filter(e=>e[1]>0).sort((a,b)=>b[1]-a[1]);
+  const legend=document.getElementById('invTypeLegend');
+  document.getElementById('invDonutCard').style.display=types.length?'block':'none';
+  if(types.length){
+    const colors=types.map(e=>(INV_TYPES[e[0]]||INV_TYPES.otro).color);
+    charts['chartInvType']=new Chart(document.getElementById('chartInvType').getContext('2d'),{type:'doughnut',
+      data:{labels:types.map(e=>(INV_TYPES[e[0]]||INV_TYPES.otro).name),datasets:[{data:types.map(e=>e[1]),backgroundColor:colors,borderWidth:0,hoverOffset:5}]},
+      options:{responsive:false,cutout:'70%',plugins:{legend:{display:false},tooltip:{callbacks:{label:i=>` ${i.label}: ${fmt(i.raw,dc)}`}}}}});
+    const total=types.reduce((a,e)=>a+e[1],0);
+    legend.innerHTML=types.slice(0,5).map((e,i)=>{const t=INV_TYPES[e[0]]||INV_TYPES.otro;
+      return `<div class="donut-row"><div class="donut-dot" style="background:${colors[i]}"></div><span class="donut-name">${t.emoji} ${esc(t.name)}</span><span class="donut-pct">${total?Math.round(e[1]/total*100):0}%</span></div>`;}).join('')
+      +(types.length>5?`<div class="donut-row" style="opacity:.5"><span class="donut-name">+${types.length-5} más</span></div>`:'');
+  }
+
+  // Lista agrupada por plataforma
+  document.getElementById('invBulkBtn').style.display=hs.length?'block':'none';
+  const list=document.getElementById('invList');
+  if(!hs.length){
+    list.innerHTML='<div class="empty-state"><div class="icon">📈</div><p>Todavía no cargaste inversiones.<br>Agregá un FCI, un ETF, una acción o una obligación<br>y seguí cuánto ganás.</p></div>';
+    return;
+  }
+  const plats=Object.entries(byPlat).map(([name,items])=>({name,items,total:items.reduce((a,x)=>a+x.c,0)})).sort((a,b)=>b.total-a.total);
+  list.innerHTML=plats.map(p=>{
+    const rows=p.items.sort((a,b)=>b.c-a.c).map(({h,s,c})=>{
+      const t=INV_TYPES[h.type]||INV_TYPES.otro;
+      const bits=[t.name+(h.currency==='USD'?' · USD':'')];
+      if(h.vencimiento)bits.push('vence '+fmtDate(h.vencimiento));
+      if(h.targetPct!=null&&p.total>0)bits.push(`hoy ${Math.round(c/p.total*100)}% · objetivo ${h.targetPct}%`);
+      const up=s.gain>=0;
+      return `<div class="inv-row" onclick="openInvDetail('${h.id}')">
+        <div class="inv-ico" style="background:${t.color}1F">${t.emoji}</div>
+        <div class="inv-info"><div class="inv-name">${esc(h.name)}</div><div class="inv-sub">${esc(bits.join(' · '))}</div></div>
+        <div class="inv-val"><b>${fmt(s.current,h.currency)}</b><span class="pill ${up?'pos':'neg'}">${invPctTxt(s.pct)}</span></div>
+      </div>`;
+    }).join('');
+    return `<div class="inv-plat"><span class="inv-plat-name">${esc(p.name)}</span><span class="inv-plat-tot">${fmt(p.total,dc)}</span></div>${rows}`;
+  }).join('');
+}
+
+// ── Alta / edición de inversión ──
+function invTypeChanged(){
+  const t=document.getElementById('invType').value;
+  document.getElementById('invVencGroup').style.display=(t==='on'||t==='bono'||t==='plazo')?'block':'none';
+}
+function openInvModal(id){
+  invEditId=id||null;
+  const h=id?invGet(id):null;
+  document.getElementById('invType').innerHTML=Object.entries(INV_TYPES).map(([k,t])=>`<option value="${k}">${t.emoji} ${esc(t.name)}</option>`).join('');
+  const plats=[...new Set((state.investments||[]).map(x=>(x.platform||'').trim()).filter(Boolean))];
+  document.getElementById('invPlatList').innerHTML=plats.map(p=>`<option value="${esc(p)}">`).join('');
+  document.getElementById('invModalTitle').textContent=h?'Editar inversión':'Nueva inversión';
+  document.getElementById('invName').value=h?h.name:'';
+  document.getElementById('invPlatform').value=h?(h.platform||''):'';
+  document.getElementById('invCurrency').value=h?h.currency:'ARS';
+  document.getElementById('invType').value=h?h.type:'fci';
+  document.getElementById('invVenc').value=h&&h.vencimiento?h.vencimiento:'';
+  document.getElementById('invTarget').value=h&&h.targetPct!=null?h.targetPct:'';
+  document.getElementById('invNotes').value=h?(h.notes||''):'';
+  document.getElementById('invNewFields').style.display=h?'none':'block';
+  document.getElementById('invInit').value='';document.getElementById('invInitVal').value='';
+  document.getElementById('invInitDate').value=invToday();
+  document.getElementById('invInitTx').checked=false;
+  invTypeChanged();
+  document.getElementById('invOverlay').classList.add('open');
+  if(!h)setTimeout(()=>document.getElementById('invName').focus(),300);
+}
+function closeInvModal(){document.getElementById('invOverlay').classList.remove('open');invEditId=null;}
+function invMakeTx(h,kind,amount,date){
+  const tx={id:Date.now()+Math.random(),type:kind==='aporte'?'expense':'income',amount,currency:h.currency,
+    description:(kind==='aporte'?'Aporte a ':'Retiro de ')+h.name,category:kind==='aporte'?'Inversión':'Inversiones',
+    date,tags:['inversión'],notes:h.platform||''};
+  if(!state.tags.includes('inversión'))state.tags.push('inversión');
+  state.transactions.push(tx);state.transactions.sort((a,b)=>b.date.localeCompare(a.date));
+  return tx.id;
+}
+function saveInv(){
+  const name=document.getElementById('invName').value.trim();
+  if(!name){alert('Ingresá un nombre.');return;}
+  const platform=document.getElementById('invPlatform').value.trim();
+  const currency=document.getElementById('invCurrency').value;
+  const type=document.getElementById('invType').value;
+  const venc=document.getElementById('invVenc').value;
+  const tv=document.getElementById('invTarget').value;
+  const target=tv===''||!isFinite(parseFloat(tv))?null:parseFloat(tv);
+  const notes=document.getElementById('invNotes').value.trim();
+  const vencOk=(type==='on'||type==='bono'||type==='plazo')&&venc?venc:'';
+  if(invEditId){
+    const h=invGet(invEditId);if(!h)return;
+    Object.assign(h,{name,platform,type,vencimiento:vencOk,targetPct:target,notes});
+    if(h.currency!==currency&&confirm('Cambiar la moneda no convierte los montos ya cargados. ¿Seguro?'))h.currency=currency;
+  }else{
+    const date=document.getElementById('invInitDate').value||invToday();
+    const iv=document.getElementById('invInit').value,vv=document.getElementById('invInitVal').value;
+    const init=iv===''?0:parseFloat(iv),val=vv===''?init:parseFloat(vv);
+    if(!isFinite(init)||init<0||!isFinite(val)||val<0){alert('Revisá los montos.');return;}
+    const h={id:invNewId(),name,platform,type,currency,vencimiento:vencOk,targetPct:target,notes,entries:[]};
+    if(init>0){
+      const e={id:invNewId(),date,kind:'aporte',amount:init};
+      if(document.getElementById('invInitTx').checked)e.txId=invMakeTx(h,'aporte',init,date);
+      h.entries.push(e);
+    }
+    if(init>0||val>0)h.entries.push({id:invNewId(),date,kind:'valor',amount:val});
+    state.investments.push(h);
+  }
+  saveState();closeInvModal();updateAll();
+  if(invDetailId)renderInvDetail();
+}
+function deleteInv(id){
+  const h=invGet(id);if(!h)return;
+  if(!confirm(`¿Eliminar "${h.name}" y todo su historial?\nLos gastos o ingresos que ya registraste en Movimientos no se borran.`))return;
+  state.investments=state.investments.filter(x=>x.id!==id);
+  saveState();closeInvDetail();updateAll();
+}
+
+// ── Detalle ──
+function openInvDetail(id){invDetailId=id;renderInvDetail();document.getElementById('invDetailOverlay').classList.add('open');}
+function closeInvDetail(){document.getElementById('invDetailOverlay').classList.remove('open');invDetailId=null;}
+function renderInvDetail(){
+  const h=invGet(invDetailId);if(!h){closeInvDetail();return;}
+  const s=invStats(h),t=INV_TYPES[h.type]||INV_TYPES.otro,r=invRendimientos(h),dc=state.displayCurrency;
+  const up=s.gain>=0;
+  let extra='';
+  if(h.targetPct!=null){
+    const p=(h.platform||'').trim();
+    const tot=(state.investments||[]).filter(x=>((x.platform||'').trim())===p).reduce((a,x)=>a+toDisp(invStats(x).current,x.currency),0);
+    const now=tot>0?Math.round(toDisp(s.current,h.currency)/tot*100):0;
+    extra+=`<div class="inv-stat"><small>Peso en ${esc(p||'su plataforma')}</small><b>${now}% <span style="font-size:10px;color:var(--text2);font-weight:600;">objetivo ${h.targetPct}%</span></b></div>`;
+  }
+  if(h.vencimiento)extra+=`<div class="inv-stat"><small>Vencimiento</small><b>${fmtDate(h.vencimiento)}</b></div>`;
+  if(r.compound!==null)extra+=`<div class="inv-stat"><small>Rend. de los controles</small><b class="${r.compound>=0?'inv-up':'inv-down'}">${invPctTxt(r.compound,2)}</b></div>`;
+  if(h.currency!==dc)extra+=`<div class="inv-stat"><small>Equivale a</small><b>${fmt(toDisp(s.current,h.currency),dc)}</b></div>`;
+  const hist=invSorted(h).reverse().map(e=>{
+    const ico=e.kind==='aporte'?'➕':e.kind==='retiro'?'➖':'📊';
+    const lbl=e.kind==='aporte'?'Aporte':e.kind==='retiro'?'Retiro':'Valor';
+    const rp=e.kind==='valor'&&r.byEntry[e.id]!==undefined?` <span class="${r.byEntry[e.id]>=0?'inv-up':'inv-down'}" style="font-weight:700;">${invPctTxt(r.byEntry[e.id],2)}</span>`:'';
+    return `<div class="inv-hist-row"><span style="font-size:15px;">${ico}</span>
+      <div style="flex:1;min-width:0;"><div style="font-weight:700;">${lbl}${rp}</div><div style="font-size:9px;color:var(--text2);">${fmtDate(e.date)}</div></div>
+      <div style="font-weight:800;">${fmt(e.amount,h.currency)}</div>
+      <button class="rm-btn" onclick="delInvEntry('${h.id}','${e.id}')">×</button></div>`;
+  }).join('')||'<div style="font-size:11px;color:var(--text3);padding:6px 0;">Sin movimientos todavía.</div>';
+  document.getElementById('invDetailBody').innerHTML=`
+    <div style="display:flex;align-items:center;gap:11px;margin:4px 0 14px;">
+      <div class="inv-ico" style="background:${t.color}1F;width:46px;height:46px;font-size:22px;">${t.emoji}</div>
+      <div style="flex:1;min-width:0;"><div style="font-size:16px;font-weight:800;">${esc(h.name)}</div>
+      <div style="font-size:10px;color:var(--text2);">${esc((h.platform||'Sin plataforma')+' · '+t.name+' · '+h.currency)}</div></div>
+    </div>
+    <div class="inv-stats">
+      <div class="inv-stat"><small>Valor actual</small><b>${fmt(s.current,h.currency)}</b></div>
+      <div class="inv-stat"><small>Invertido</small><b>${fmt(s.invested,h.currency)}</b></div>
+      <div class="inv-stat"><small>Ganancia</small><b class="${up?'inv-up':'inv-down'}">${fmtS(s.gain,h.currency)}</b></div>
+      <div class="inv-stat"><small>Rendimiento</small><b class="${up?'inv-up':'inv-down'}">${invPctTxt(s.pct,2)}</b></div>
+      ${extra}
+    </div>
+    ${h.notes?`<div style="font-size:11px;color:var(--text2);background:var(--bg);border-radius:11px;padding:9px 12px;margin-bottom:12px;line-height:1.5;">📝 ${esc(h.notes)}</div>`:''}
+    <div class="inv-act-row">
+      <button class="inv-act" onclick="openInvEntry('${h.id}','aporte')">➕ Aporte</button>
+      <button class="inv-act" onclick="openInvEntry('${h.id}','retiro')">➖ Retiro</button>
+      <button class="inv-act" onclick="openInvEntry('${h.id}','valor')">📊 Valor</button>
+    </div>
+    <div class="form-label" style="margin-bottom:2px;">Historial</div>
+    <div style="margin-bottom:14px;">${hist}</div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn-secondary" onclick="openInvModal('${h.id}')">✏️ Editar</button>
+      <button class="btn-secondary" style="color:var(--expense);" onclick="deleteInv('${h.id}')">🗑️ Eliminar</button>
+    </div>
+    <div style="height:8px;"></div>`;
+}
+function delInvEntry(hid,eid){
+  const h=invGet(hid);if(!h)return;
+  const e=(h.entries||[]).find(x=>x.id===eid);if(!e)return;
+  const hasTx=e.txId!==undefined&&state.transactions.some(t=>t.id===e.txId);
+  if(!confirm('¿Eliminar este movimiento?'+(hasTx?'\nTambién se borra el gasto/ingreso que se registró con él.':'')))return;
+  if(hasTx)state.transactions=state.transactions.filter(t=>t.id!==e.txId);
+  h.entries=h.entries.filter(x=>x.id!==eid);
+  saveState();updateAll();renderInvDetail();
+}
+
+// ── Aporte / retiro / valor ──
+function openInvEntry(hid,kind){
+  const h=invGet(hid);if(!h)return;
+  invEntryHid=hid;
+  document.getElementById('invEntryTitle').textContent=h.name;
+  document.getElementById('invEntryAmt').value='';
+  document.getElementById('invEntryDate').value=invToday();
+  document.getElementById('invEntryTx').checked=true;
+  setInvEntryKind(kind||'aporte');
+  document.getElementById('invEntryOverlay').classList.add('open');
+  setTimeout(()=>document.getElementById('invEntryAmt').focus(),300);
+}
+function closeInvEntry(){document.getElementById('invEntryOverlay').classList.remove('open');invEntryHid=null;}
+function setInvEntryKind(k){
+  invEntryKind=k;const h=invGet(invEntryHid);const cur=h?h.currency:'ARS';
+  ['Aporte','Retiro','Valor'].forEach(n=>document.getElementById('ie'+n).classList.toggle('active',n.toLowerCase()===k));
+  document.getElementById('invEntryAmtLabel').textContent=(k==='valor'?'Valor actual total':'Monto')+' ('+cur+')';
+  document.getElementById('invEntryHint').textContent=k==='valor'?'Cuánto vale hoy la inversión completa, no solo lo último que pusiste.':'';
+  const row=document.getElementById('invEntryTxRow');
+  row.style.display=k==='valor'?'none':'flex';
+  document.getElementById('invEntryTxLabel').textContent=k==='aporte'
+    ?'Registrar también como gasto «Inversión» (sale de mi dinero disponible)'
+    :'Registrar también como ingreso (vuelve a mi dinero disponible)';
+}
+function saveInvEntry(){
+  const h=invGet(invEntryHid);if(!h)return;
+  const amount=parseFloat(document.getElementById('invEntryAmt').value);
+  if(!isFinite(amount)||amount<0||(invEntryKind!=='valor'&&amount<=0)){alert('Ingresá un monto válido.');return;}
+  const date=document.getElementById('invEntryDate').value||invToday();
+  const e={id:invNewId(),date,kind:invEntryKind,amount};
+  if(invEntryKind!=='valor'&&document.getElementById('invEntryTx').checked)e.txId=invMakeTx(h,invEntryKind,amount,date);
+  h.entries.push(e);
+  saveState();closeInvEntry();updateAll();
+  if(invDetailId===h.id)renderInvDetail();
+}
+
+// ── Actualizar valores de todas ──
+function openInvBulk(){
+  const hs=state.investments||[];if(!hs.length)return;
+  document.getElementById('invBulkDate').value=invToday();
+  const byPlat={};
+  hs.forEach(h=>{const p=(h.platform||'').trim()||'Sin plataforma';(byPlat[p]=byPlat[p]||[]).push(h);});
+  document.getElementById('invBulkBody').innerHTML=Object.entries(byPlat).map(([p,items])=>
+    `<div class="form-label" style="margin:10px 0 2px;">${esc(p)}</div>`+items.map(h=>{
+      const s=invStats(h),t=INV_TYPES[h.type]||INV_TYPES.otro;
+      return `<div class="inv-bulk-row"><div class="inv-info"><div class="inv-name">${t.emoji} ${esc(h.name)}</div><div class="inv-sub">hoy: ${fmt(s.current,h.currency)}</div></div>
+        <input class="form-control inv-bulk-in" style="width:128px;" type="number" inputmode="decimal" step="any" min="0" data-id="${h.id}" placeholder="${invNum(s.current)}"></div>`;
+    }).join('')).join('');
+  document.getElementById('invBulkOverlay').classList.add('open');
+}
+function closeInvBulk(){document.getElementById('invBulkOverlay').classList.remove('open');}
+function saveInvBulk(){
+  const date=document.getElementById('invBulkDate').value||invToday();let n=0;
+  document.querySelectorAll('.inv-bulk-in').forEach(inp=>{
+    if(inp.value==='')return;
+    const v=parseFloat(inp.value),h=invGet(inp.dataset.id);
+    if(!h||!isFinite(v)||v<0)return;
+    h.entries.push({id:invNewId(),date,kind:'valor',amount:v});n++;
+  });
+  if(!n){closeInvBulk();return;}
+  saveState();closeInvBulk();updateAll();
+}
+
+// ── Exportar / importar inversiones (JSON) ──
+function exportInvestments(){
+  const data={fundida:'investments',version:1,exportedAt:new Date().toISOString(),investments:state.investments||[]};
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));
+  a.download='fundida-inversiones-'+invToday()+'.json';a.click();
+}
+function invSanitize(raw){
+  if(!raw||typeof raw.name!=='string'||!raw.name.trim())return null;
+  const str=(v)=>typeof v==='string'?v:'';
+  const date=(v)=>/^\d{4}-\d{2}-\d{2}$/.test(v)?v:'';
+  const entries=(Array.isArray(raw.entries)?raw.entries:[]).map(e=>{
+    if(!e||!['aporte','retiro','valor'].includes(e.kind)||!isFinite(e.amount)||!date(e.date))return null;
+    return {id:invNewId(),date:e.date,kind:e.kind,amount:+e.amount};
+  }).filter(Boolean);
+  return {id:invNewId(),name:raw.name.trim().slice(0,80),platform:str(raw.platform).slice(0,60),
+    type:INV_TYPES[raw.type]?raw.type:'otro',currency:raw.currency==='USD'?'USD':'ARS',
+    vencimiento:date(raw.vencimiento),targetPct:isFinite(raw.targetPct)&&raw.targetPct!==null?+raw.targetPct:null,
+    notes:str(raw.notes).slice(0,300),entries};
+}
+function importInvestmentsFile(ev){
+  const f=ev.target.files[0];if(!f)return;
+  const rd=new FileReader();
+  rd.onload=()=>{
+    try{
+      const d=JSON.parse(rd.result);
+      if(!d||d.fundida!=='investments'||!Array.isArray(d.investments))throw new Error('formato');
+      const list=d.investments.map(invSanitize).filter(Boolean);
+      if(!list.length){alert('El archivo no tiene inversiones válidas.');return;}
+      if(!confirm(`Se van a agregar ${list.length} inversiones a las que ya tenés. ¿Continuar?`))return;
+      state.investments=(state.investments||[]).concat(list);
+      saveState();closeSettings();updateAll();
+      alert(`✅ Se importaron ${list.length} inversiones. Las ves en Riqueza → Inversiones.`);
+    }catch(err){alert('No pude leer el archivo. Tiene que ser un JSON exportado desde Fundida.');}
+    ev.target.value='';
+  };
+  rd.readAsText(f);
 }
 
 // ══════════════════════════════════════════
