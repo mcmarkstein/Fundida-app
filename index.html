@@ -196,6 +196,7 @@ body{display:flex;flex-direction:column;max-width:430px;margin:0 auto;min-height
 /* ── SHEET (modal bottom) ── */
 .sheet-overlay{position:fixed;inset:0;background:rgba(10,10,30,.5);z-index:200;display:none;align-items:flex-end;justify-content:center;}
 .sheet-overlay.open{display:flex;}
+#invOverlay,#invEntryOverlay{z-index:210;}
 .sheet{background:var(--white);border-radius:24px 24px 0 0;width:100%;max-width:430px;max-height:90vh;overflow-y:auto;padding-bottom:16px;}
 .sheet-handle{width:36px;height:4px;background:var(--border);border-radius:2px;margin:10px auto 14px;}
 .sheet-title{font-size:17px;font-weight:800;text-align:center;margin-bottom:16px;color:var(--text);}
@@ -635,6 +636,17 @@ body {
             <canvas class="donut-canvas" id="chartInvType" width="115" height="115"></canvas>
             <div class="donut-legend" id="invTypeLegend"></div>
           </div>
+        </div>
+        <div class="card" id="invFlowCard">
+          <div class="card-title">Invertido</div>
+          <div class="card-subtitle" id="invFlowSub">Aportes por período</div>
+          <div style="display:flex;gap:8px;margin-bottom:10px;">
+            <select class="form-control" id="invFlowMode" onchange="renderInvFlow()" style="font-size:12px;padding:6px 10px;">
+              <option value="year">Por año</option><option value="month">Por mes</option>
+            </select>
+            <select class="form-control" id="invFlowYear" onchange="renderInvFlow()" style="font-size:12px;padding:6px 10px;display:none;"></select>
+          </div>
+          <div style="position:relative;height:170px;"><canvas id="chartInvFlow"></canvas></div>
         </div>
         <div id="invBtnRow" style="display:flex;gap:8px;margin-bottom:4px;">
           <button class="btn-secondary" onclick="openInvMulti()">➕ Aporte repartido</button>
@@ -2775,6 +2787,8 @@ function renderInvestments(){
       +(types.length>5?`<div class="donut-row" style="opacity:.5"><span class="donut-name">+${types.length-5} más</span></div>`:'');
   }
 
+  renderInvFlow();
+
   // Lista agrupada por plataforma
   document.getElementById('invBtnRow').style.display=hs.length?'flex':'none';
   const list=document.getElementById('invList');
@@ -2798,6 +2812,30 @@ function renderInvestments(){
     }).join('');
     return `<div class="inv-plat"><span class="inv-plat-name">${esc(p.name)}</span><span class="inv-plat-tot">${fmt(p.total,dc)}</span></div>${rows}`;
   }).join('');
+}
+
+// ── Gráfico: cuánto se invirtió por año / por mes ──
+function renderInvFlow(){
+  const dc=state.displayCurrency,hs=state.investments||[];
+  const card=document.getElementById('invFlowCard');
+  const ap=[];hs.forEach(h=>(h.entries||[]).forEach(e=>{if(e.kind==='aporte'&&e.date)ap.push({y:+e.date.slice(0,4),m:+e.date.slice(5,7),v:toDisp(e.amount,h.currency)});}));
+  destroyChart('chartInvFlow');
+  card.style.display=ap.length?'block':'none';if(!ap.length)return;
+  const mode=document.getElementById('invFlowMode').value,ysel=document.getElementById('invFlowYear');
+  const years=[...new Set(ap.map(x=>x.y))].sort((a,b)=>a-b);
+  const prev=ysel.value;ysel.innerHTML=years.slice().reverse().map(y=>`<option value="${y}">${y}</option>`).join('');
+  ysel.value=years.includes(+prev)?prev:String(years[years.length-1]);
+  ysel.style.display=mode==='month'?'block':'none';
+  let labels,data;
+  if(mode==='year'){labels=years.map(String);data=years.map(y=>ap.filter(x=>x.y===y).reduce((a,x)=>a+x.v,0));}
+  else{const y=+ysel.value;labels=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];data=labels.map((_,i)=>ap.filter(x=>x.y===y&&x.m===i+1).reduce((a,x)=>a+x.v,0));}
+  const tot=data.reduce((a,b)=>a+b,0);
+  document.getElementById('invFlowSub').textContent=(mode==='year'?'Aportes por año':'Aportes de '+ysel.value)+' · total '+fmt(tot,dc);
+  charts['chartInvFlow']=new Chart(document.getElementById('chartInvFlow').getContext('2d'),{type:'bar',
+    data:{labels,datasets:[{data,backgroundColor:'#6C63FF',borderRadius:6,borderSkipped:false}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:i=>' '+fmt(i.raw,dc)}}},
+      scales:{x:{grid:{display:false},ticks:{color:'#6B7280',font:{family:'Poppins',size:9},maxRotation:0}},
+        y:{grid:{color:'#F5F6FA'},border:{display:false},beginAtZero:true,ticks:{color:'#6B7280',font:{family:'Poppins',size:9},maxTicksLimit:5,callback:v=>smartYTick(v,dc)}}}}});
 }
 
 // ── Alta / edición de inversión ──
@@ -2868,9 +2906,16 @@ function saveInv(){
   saveState();closeInvModal();updateAll();
   if(invDetailId)renderInvDetail();
 }
+let invArmed=null,invArmT=null;
+function invTwoTap(key,btn,label){
+  if(invArmed===key){invArmed=null;clearTimeout(invArmT);return true;}
+  invArmed=key;if(btn){btn.dataset.old=btn.textContent;btn.textContent=label;btn.style.fontWeight='800';}
+  clearTimeout(invArmT);invArmT=setTimeout(()=>{invArmed=null;if(btn&&btn.isConnected){btn.textContent=btn.dataset.old;btn.style.fontWeight='';}},4000);
+  return false;
+}
 function deleteInv(id){
   const h=invGet(id);if(!h)return;
-  if(!confirm(`¿Eliminar "${h.name}" y todo su historial?\nLos gastos o ingresos que ya registraste en Movimientos no se borran.`))return;
+  if(!invTwoTap('inv'+id,event&&event.currentTarget,'⚠️ Tocá de nuevo para borrar'))return;
   state.investments=state.investments.filter(x=>x.id!==id);
   saveState();closeInvDetail();updateAll();
 }
@@ -2899,7 +2944,7 @@ function renderInvDetail(){
     return `<div class="inv-hist-row"><span style="font-size:15px;">${ico}</span>
       <div style="flex:1;min-width:0;"><div style="font-weight:700;">${lbl}${rp}</div><div style="font-size:9px;color:var(--text2);">${fmtDate(e.date)}</div></div>
       <div style="font-weight:800;">${fmt(e.amount,h.currency)}</div>
-      <button class="rm-btn" onclick="delInvEntry('${h.id}','${e.id}')">×</button></div>`;
+      <button class="rm-btn" style="width:auto;padding:0 8px;" onclick="delInvEntry('${h.id}','${e.id}')">×</button></div>`;
   }).join('')||'<div style="font-size:11px;color:var(--text3);padding:6px 0;">Sin movimientos todavía.</div>';
   document.getElementById('invDetailBody').innerHTML=`
     <div style="display:flex;align-items:center;gap:11px;margin:4px 0 14px;">
@@ -2932,7 +2977,7 @@ function delInvEntry(hid,eid){
   const h=invGet(hid);if(!h)return;
   const e=(h.entries||[]).find(x=>x.id===eid);if(!e)return;
   const hasTx=e.txId!==undefined&&state.transactions.some(t=>t.id===e.txId);
-  if(!confirm('¿Eliminar este movimiento?'+(hasTx?'\nTambién se descuenta del gasto/ingreso que se registró con él.':'')))return;
+  if(!invTwoTap('e'+eid,event&&event.currentTarget,'¿Borrar?'))return;
   if(hasTx){
     if(e.txPart){const tx=state.transactions.find(t=>t.id===e.txId);tx.amount=Math.round((tx.amount-e.amount)*100)/100;if(tx.amount<=0.005)state.transactions=state.transactions.filter(t=>t.id!==e.txId);}
     else state.transactions=state.transactions.filter(t=>t.id!==e.txId);
