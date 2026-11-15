@@ -1168,7 +1168,8 @@ body {
         <input type="checkbox" id="invEntryTx" checked>
         <label for="invEntryTx" id="invEntryTxLabel"></label>
       </div>
-      <button class="btn-primary" onclick="saveInvEntry()">Guardar</button>
+      <div id="invEntryPartNote" style="display:none;font-size:11px;color:var(--text2);background:var(--bg);border-radius:10px;padding:8px 11px;margin-bottom:11px;line-height:1.5;"></div>
+      <button class="btn-primary" id="invEntrySaveBtn" onclick="saveInvEntry()">Guardar</button>
     </div>
   </div>
 </div>
@@ -2782,7 +2783,7 @@ const INV_TYPES={
   billetera:{name:'Billetera virtual',emoji:'👛',color:'#F472B6'},
   otro:  {name:'Otro',              emoji:'📦',color:'#94A3B8'},
 };
-let wealthView='main',invDetailId=null,invEditId=null,invEntryKind='aporte',invEntryHid=null;
+let wealthView='main',invDetailId=null,invEditId=null,invEntryKind='aporte',invEntryHid=null,invEntryEditId=null;
 
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function invNewId(){return 'i'+Date.now().toString(36)+Math.random().toString(36).slice(2,8);}
@@ -3033,6 +3034,7 @@ function renderInvDetail(){
     return `<div class="inv-hist-row"><span style="font-size:15px;">${ico}</span>
       <div style="flex:1;min-width:0;"><div style="font-weight:700;">${lbl}${rp}</div><div style="font-size:9px;color:var(--text2);">${fmtDate(e.date)}</div></div>
       <div style="font-weight:800;">${fmt(e.amount,h.currency)}</div>
+      ${state.transactions.some(t=>t.payFrom&&t.payFrom.eid===e.id)?'<span title="Vinculado a un gasto: editalo en Registros" style="font-size:13px;margin-right:4px;">🔗</span>':`<button class="rm-btn" style="background:#EEF0FF;color:var(--accent);font-size:12px;margin-right:4px;" onclick="openInvEntryEdit('${h.id}','${e.id}')">✏️</button>`}
       <button class="rm-btn" style="width:auto;padding:0 8px;" onclick="delInvEntry('${h.id}','${e.id}')">×</button></div>`;
   }).join('')||'<div style="font-size:11px;color:var(--text3);padding:6px 0;">Sin movimientos todavía.</div>';
   document.getElementById('invDetailBody').innerHTML=`
@@ -3079,8 +3081,10 @@ function delInvEntry(hid,eid){
 // ── Aporte / retiro / valor ──
 function openInvEntry(hid,kind){
   const h=invGet(hid);if(!h)return;
-  invEntryHid=hid;
+  invEntryHid=hid;invEntryEditId=null;
   document.getElementById('invEntryTitle').textContent=h.name;
+  document.getElementById('invEntrySaveBtn').textContent='Guardar';
+  document.getElementById('invEntryPartNote').style.display='none';
   document.getElementById('invEntryAmt').value='';
   document.getElementById('invEntryDate').value=invToday();
   document.getElementById('invEntryTx').checked=true;
@@ -3088,7 +3092,30 @@ function openInvEntry(hid,kind){
   document.getElementById('invEntryOverlay').classList.add('open');
   setTimeout(()=>document.getElementById('invEntryAmt').focus(),300);
 }
-function closeInvEntry(){document.getElementById('invEntryOverlay').classList.remove('open');invEntryHid=null;}
+function closeInvEntry(){document.getElementById('invEntryOverlay').classList.remove('open');invEntryHid=null;invEntryEditId=null;}
+// Editar un movimiento ya cargado: tipo, monto, fecha y si está registrado como Inversión/Rescate
+function openInvEntryEdit(hid,eid){
+  const h=invGet(hid);if(!h)return;
+  const e=(h.entries||[]).find(x=>x.id===eid);if(!e)return;
+  invEntryHid=hid;invEntryEditId=eid;
+  document.getElementById('invEntryTitle').textContent=h.name+' · editar movimiento';
+  document.getElementById('invEntryAmt').value=e.amount;
+  document.getElementById('invEntryDate').value=e.date;
+  const tx=e.txId!==undefined?state.transactions.find(t=>t.id===e.txId):null;
+  document.getElementById('invEntryTx').checked=!!tx;
+  setInvEntryKind(e.kind);
+  const part=!!(e.txPart&&tx);
+  const note=document.getElementById('invEntryPartNote');
+  note.style.display=part?'block':'none';
+  if(part){document.getElementById('invEntryTxRow').style.display='none';note.textContent='Este aporte forma parte de un registro repartido entre varios activos. Si cambiás el monto, el registro se ajusta; para quitarlo, borrá el movimiento y cargalo de nuevo.';}
+  document.getElementById('invEntrySaveBtn').textContent='Guardar cambios';
+  document.getElementById('invEntryOverlay').classList.add('open');
+}
+function invFillTx(tx,h,kind,amount,date){
+  tx.type=kind==='aporte'?'expense':'income';tx.amount=amount;tx.date=date;tx.currency=h.currency;
+  tx.description=(kind==='aporte'?'Aporte a ':'Retiro de ')+h.name;
+  tx.category=kind==='aporte'?INV_OUT_CAT:INV_IN_CAT;
+}
 function setInvEntryKind(k){
   invEntryKind=k;const h=invGet(invEntryHid);const cur=h?h.currency:'ARS';
   ['Aporte','Retiro','Valor'].forEach(n=>document.getElementById('ie'+n).classList.toggle('active',n.toLowerCase()===k));
@@ -3105,6 +3132,26 @@ function saveInvEntry(){
   const amount=parseFloat(document.getElementById('invEntryAmt').value);
   if(!isFinite(amount)||amount<0||(invEntryKind!=='valor'&&amount<=0)){alert('Ingresá un monto válido.');return;}
   const date=document.getElementById('invEntryDate').value||invToday();
+  if(invEntryEditId){
+    const ed=(h.entries||[]).find(x=>x.id===invEntryEditId);if(!ed)return;
+    let tx=ed.txId!==undefined?state.transactions.find(t=>t.id===ed.txId):null;
+    if(tx&&ed.txPart){ // parte de un registro repartido: ajusta el total del registro
+      tx.amount=Math.round((tx.amount-ed.amount+amount)*100)/100;
+      ed.amount=amount;ed.date=date;
+    }else{
+      const want=invEntryKind!=='valor'&&document.getElementById('invEntryTx').checked;
+      ed.kind=invEntryKind;ed.amount=amount;ed.date=date;
+      if(want&&tx){invFillTx(tx,h,invEntryKind,amount,date);}
+      else if(want&&!tx){ed.txId=invMakeTx(h,invEntryKind,amount,date);}
+      else if(!want&&tx){state.transactions=state.transactions.filter(t=>t.id!==tx.id);delete ed.txId;}
+      else delete ed.txId;
+      delete ed.txPart;
+    }
+    state.transactions.sort((a,b)=>b.date.localeCompare(a.date));
+    saveState();closeInvEntry();updateAll();
+    if(invDetailId===h.id)renderInvDetail();
+    return;
+  }
   const e={id:invNewId(),date,kind:invEntryKind,amount};
   if(invEntryKind!=='valor'&&document.getElementById('invEntryTx').checked)e.txId=invMakeTx(h,invEntryKind,amount,date);
   h.entries.push(e);
