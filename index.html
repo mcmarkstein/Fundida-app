@@ -691,11 +691,16 @@ body {
         <span class="amount-prefix">$</span>
         <input class="amount-field" type="number" id="txAmount" placeholder="0" min="0" step="any">
         <div class="cur-select-pos">
-          <select class="cur-select" id="txCurrency">
+          <select class="cur-select" id="txCurrency" onchange="renderPayFrom()">
             <option value="ARS">ARS 🇦🇷</option>
             <option value="USD">USD 🇺🇸</option>
           </select>
         </div>
+      </div>
+      <div class="form-group" id="txPayGroup" style="display:none;">
+        <label class="form-label">Pagado con</label>
+        <select class="form-control" id="txPayFrom"></select>
+        <div style="font-size:10px;color:var(--text2);margin-top:4px;line-height:1.5;">Si elegís una billetera, se descuenta de su saldo y no de tu dinero disponible.</div>
       </div>
       <div class="form-group">
         <label class="form-label">Descripción</label>
@@ -807,6 +812,7 @@ body {
           </select>
         </div>
       </div>
+      <div id="editPayNote" style="display:none;font-size:11px;color:#BE185D;background:#FCE7F3;border-radius:10px;padding:8px 11px;margin-bottom:11px;line-height:1.5;"></div>
       <div class="form-group">
         <label class="form-label">Descripción</label>
         <input class="form-control" type="text" id="editTxDesc" placeholder="Descripción…">
@@ -1040,6 +1046,16 @@ body {
         <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:9px;" id="globalTagsMgr"></div>
       </div>
       <div class="divider"></div>
+      <div class="form-group">
+        <label class="form-label">Plataformas (brokers y billeteras)</label>
+        <div class="form-row">
+          <input class="form-control" id="newPlatInput" placeholder="Ej: IOL, Naranja X, Carrefour…">
+          <button class="btn-primary" style="font-size:12px;padding:9px;" onclick="addPlatform()">＋ Agregar</button>
+        </div>
+        <div class="chk-row" style="margin-top:7px;"><input type="checkbox" id="newPlatWallet"><label for="newPlatWallet">Es una billetera: puedo pagar gastos con su saldo</label></div>
+        <div id="platMgr" style="margin-top:8px;"></div>
+      </div>
+      <div class="divider"></div>
 
       <div style="background:#EEF2FF;border-radius:12px;padding:12px;margin-bottom:10px;font-size:11px;color:var(--text2);line-height:1.6;">
         💾 <strong style="color:var(--text);">Tus datos se guardan automáticamente</strong> en este navegador.<br>
@@ -1074,8 +1090,8 @@ body {
       <div class="form-row">
         <div class="form-group">
           <label class="form-label">Plataforma</label>
-          <input class="form-control" type="text" id="invPlatform" list="invPlatList" placeholder="IOL, Galicia…">
-          <datalist id="invPlatList"></datalist>
+          <select class="form-control" id="invPlatform" onchange="invPlatChanged()"></select>
+          <input class="form-control" type="text" id="invPlatNew" placeholder="Nombre de la nueva plataforma" style="display:none;margin-top:6px;">
         </div>
         <div class="form-group">
           <label class="form-label">Moneda</label>
@@ -1284,6 +1300,8 @@ let deferredInstallPrompt=null;
 function loadState(){
   try{const s=localStorage.getItem('fundida_v4');if(s)state={...state,...JSON.parse(s)};}catch(e){}
   if(!Array.isArray(state.investments))state.investments=[];
+  if(!Array.isArray(state.platforms))state.platforms=[];
+  state.investments.forEach(h=>{const n=(h.platform||'').trim();if(n&&!state.platforms.some(p=>p.name===n))state.platforms.push({name:n,wallet:h.type==='billetera'});});
   migrateDefaults();
 }
 // Una sola vez por dispositivo: suma las categorías/etiquetas nuevas por defecto y las que ya usás en tus movimientos
@@ -1492,6 +1510,7 @@ function renderRecords(){
             <div class="tx-meta">
               <span style="color:${cat.color};font-weight:700;font-size:9px;">${cat.name}</span>
               ${(tx.tags||[]).map(t=>`<span class="tx-tag">${esc(t)}</span>`).join('')}
+              ${payName(tx)?`<span class="tx-tag" style="background:#FCE7F3;color:#BE185D;">👛 ${esc(payName(tx))}</span>`:''}
               ${tx.notes?`<span class="tx-tag" style="font-style:italic;">${tx.notes.substring(0,18)}</span>`:''}
             </div>
           </div>
@@ -1521,6 +1540,10 @@ function openEditTx(id){
   document.getElementById('editTxDesc').value=tx.description;
   document.getElementById('editTxDate').value=tx.date;
   document.getElementById('editTxNotes').value=tx.notes||'';
+  const pn=document.getElementById('editPayNote'),pnm=payName(tx);
+  pn.style.display=pnm?'block':'none';
+  if(pnm)pn.textContent='👛 Pagado con '+pnm+'. Si cambiás el monto o la fecha, se ajusta también el retiro de la billetera. Para cambiar la billetera, borrá el gasto y cargalo de nuevo.';
+  document.getElementById('editTxCurrency').disabled=!!tx.payFrom;
   setTimeout(()=>{
     document.querySelectorAll('#editCatGrid .cat-item').forEach(el=>{
       el.classList.toggle('selected',el.dataset.name===tx.category);
@@ -1576,6 +1599,7 @@ function saveEditTx(){
   const type=document.getElementById('editBtnIncome').classList.contains('active')?'income':'expense';
   state.transactions[idx]={...state.transactions[idx],type,amount,currency:document.getElementById('editTxCurrency').value,description:desc,category:editSelectedCat,date:document.getElementById('editTxDate').value,tags:[...editTxTags],notes:document.getElementById('editTxNotes').value.trim()};
   editTxTags.forEach(t=>{if(!state.tags.includes(t))state.tags.push(t);});
+  { const t=state.transactions[idx]; if(t.payFrom){ if(type!=='expense')unlinkPay(t); else syncPay(t); } }
   state.transactions.sort((a,b)=>b.date.localeCompare(a.date));
   saveState(); closeEditTx(); updateAll();
 }
@@ -1584,6 +1608,7 @@ function deleteFromEdit(){
   if(!confirm('¿Eliminar este movimiento?')) return;
   const gone=state.transactions.find(t=>t.id===editingTxId);
   if(gone&&gone.recurringId){const rec=(state.recurring||[]).find(r=>r.id===gone.recurringId);if(rec)rec.skipped=[...new Set([...(rec.skipped||[]),mk(gone.date)])];}
+  unlinkPay(gone);
   state.transactions=state.transactions.filter(t=>t.id!==editingTxId);
   saveState(); closeEditTx(); updateAll();
 }
@@ -2047,12 +2072,46 @@ function openModal(){
 }
 function closeTxModal(){document.getElementById('txOverlay').classList.remove('open');}
 function setType(type){
-  currentTxType=type;selectedCat=null;
+  currentTxType=type;selectedCat=null;renderPayFrom();
   document.getElementById('btnIncome').classList.toggle('active',type==='income');
   document.getElementById('btnExpense').classList.toggle('active',type==='expense');
   const grid=document.getElementById('catGrid');
   grid.innerHTML=state.categories[type].map(c=>`<div class="cat-item" onclick="selectCat('${c.name.replace(/'/g,"\\'")}',this)"><div class="cat-item-icon" style="background:${c.color}1A;">${c.emoji}</div><div class="cat-item-name">${c.name}</div></div>`).join('');
 }
+function payOptions(cur){
+  const wl=new Set((state.platforms||[]).filter(p=>p.wallet).map(p=>p.name));
+  const hs=(state.investments||[]).filter(h=>h.currency===cur&&(h.type==='billetera'||wl.has((h.platform||'').trim())));
+  return hs.map(h=>{const same=hs.filter(x=>(x.platform||'')===(h.platform||'')).length>1;
+    return {id:h.id,label:(h.platform?h.platform:h.name)+(same||!h.platform?(h.platform?' · '+h.name:''):'')};});
+}
+function renderPayFrom(){
+  const g=document.getElementById('txPayGroup'),sel=document.getElementById('txPayFrom');if(!g)return;
+  const opts=currentTxType==='expense'?payOptions(document.getElementById('txCurrency').value):[];
+  g.style.display=opts.length?'block':'none';
+  sel.innerHTML='<option value="">Mi dinero (efectivo, cuenta, tarjeta)</option>'+opts.map(o=>`<option value="${o.id}">👛 ${esc(o.label)}</option>`).join('');
+}
+// Un gasto pagado con billetera = el gasto + un retiro de esa billetera (rescate) que lo cancela en tu dinero
+function linkPay(tx,hid){
+  const h=invGet(hid);if(!h||h.currency!==tx.currency)return;
+  const rid=invMakeTx(h,'retiro',tx.amount,tx.date);
+  const eid=invNewId();
+  h.entries.push({id:eid,date:tx.date,kind:'retiro',amount:tx.amount,txId:rid});
+  tx.payFrom={hid,eid,rid};
+}
+function unlinkPay(tx){
+  const pf=tx&&tx.payFrom;if(!pf)return;
+  const h=invGet(pf.hid);
+  if(h)h.entries=(h.entries||[]).filter(e=>e.id!==pf.eid);
+  state.transactions=state.transactions.filter(t=>t.id!==pf.rid);
+  delete tx.payFrom;
+}
+function syncPay(tx){
+  const pf=tx.payFrom;if(!pf)return;
+  const h=invGet(pf.hid),e=h&&(h.entries||[]).find(x=>x.id===pf.eid),r=state.transactions.find(t=>t.id===pf.rid);
+  if(e){e.amount=tx.amount;e.date=tx.date;}
+  if(r){r.amount=tx.amount;r.date=tx.date;}
+}
+function payName(tx){const h=tx.payFrom&&invGet(tx.payFrom.hid);return h?((h.platform||'')||h.name):'';}
 function selectCat(name,el){selectedCat=name;document.querySelectorAll('.cat-item').forEach(e=>e.classList.remove('selected'));el.classList.add('selected');}
 function renderTagsWrap(){
   const wrap=document.getElementById('tagsWrap'),inp=document.getElementById('tagInput');
@@ -2081,7 +2140,10 @@ function saveTransaction(){
   if(!selectedCat){alert('Seleccioná una categoría.');return;}
   const tx={id:Date.now()+Math.random(),type:currentTxType,amount,currency:document.getElementById('txCurrency').value,description:desc,category:selectedCat,date:document.getElementById('txDate').value,tags:[...currentTxTags],notes:document.getElementById('txNotes').value.trim()};
   tx.tags.forEach(t=>{if(!state.tags.includes(t))state.tags.push(t);});
-  state.transactions.push(tx);state.transactions.sort((a,b)=>b.date.localeCompare(a.date));
+  state.transactions.push(tx);
+  const pay=currentTxType==='expense'?document.getElementById('txPayFrom').value:'';
+  if(pay)linkPay(tx,pay);
+  state.transactions.sort((a,b)=>b.date.localeCompare(a.date));
   saveState();closeTxModal();updateAll();
 }
 
@@ -2095,6 +2157,7 @@ function renderSettingsUI(){
     document.getElementById(type==='expense'?'expCatList':'incCatList').innerHTML=
       state.categories[type].map(c=>`<div class="setting-cat-row"><span style="font-size:17px">${c.emoji}</span><span style="flex:1;font-size:12px;font-weight:600">${c.name}</span><span style="width:12px;height:12px;border-radius:3px;background:${c.color};display:inline-block;"></span><button class="rm-btn" onclick="removeCat('${type}','${c.name.replace(/'/g,"\\'")}')">×</button></div>`).join('');
   });
+  renderPlatMgr();
   document.getElementById('globalTagsMgr').innerHTML=state.tags.map(t=>`<span class="tag-chip" style="cursor:pointer;" onclick="removeGlobalTag('${t}')">#${t}<span class="rm"> ×</span></span>`).join('');
 }
 function addCat(type){
@@ -2108,6 +2171,19 @@ function addCat(type){
   saveState();renderSettingsUI();
 }
 function removeCat(type,name){if(state.categories[type].length<=1){alert('Necesitás al menos 1 categoría.');return;}if(!confirm(`¿Eliminar "${name}"?`))return;state.categories[type]=state.categories[type].filter(c=>c.name!==name);saveState();renderSettingsUI();}
+function renderPlatMgr(){
+  const el=document.getElementById('platMgr');if(!el)return;
+  const ps=state.platforms||[];
+  el.innerHTML=ps.length?ps.map((p,i)=>`<div class="setting-cat-row"><span style="font-size:16px">${p.wallet?'👛':'🏦'}</span><span style="flex:1;font-size:12px;font-weight:600">${esc(p.name)}</span><button class="btn-secondary" style="width:auto;padding:3px 9px;font-size:10px;" onclick="togglePlatWallet(${i})">${p.wallet?'Billetera ✓':'Broker/banco'}</button><button class="rm-btn" onclick="removePlatform(${i})">×</button></div>`).join(''):'<div style="font-size:11px;color:var(--text3);">Todavía no cargaste plataformas.</div>';
+}
+function addPlatform(){
+  const inp=document.getElementById('newPlatInput'),v=inp.value.trim();
+  if(!v)return;
+  if(!state.platforms.some(p=>p.name.toLowerCase()===v.toLowerCase()))state.platforms.push({name:v,wallet:document.getElementById('newPlatWallet').checked});
+  inp.value='';document.getElementById('newPlatWallet').checked=false;saveState();renderPlatMgr();
+}
+function togglePlatWallet(i){const p=state.platforms[i];if(p){p.wallet=!p.wallet;saveState();renderPlatMgr();}}
+function removePlatform(i){state.platforms.splice(i,1);saveState();renderPlatMgr();}
 function addGlobalTag(){const inp=document.getElementById('newTagInput');const v=inp.value.trim();if(v&&!state.tags.includes(v)){state.tags.push(v);saveState();renderSettingsUI();}inp.value='';}
 function removeGlobalTag(t){state.tags=state.tags.filter(x=>x!==t);saveState();renderSettingsUI();}
 
@@ -2703,6 +2779,7 @@ const INV_TYPES={
   plazo: {name:'Plazo fijo',        emoji:'⏳',color:'#14B8A6'},
   usd:   {name:'Dólares',           emoji:'💵',color:'#3B82F6'},
   cripto:{name:'Cripto',            emoji:'🪙',color:'#FF8C42'},
+  billetera:{name:'Billetera virtual',emoji:'👛',color:'#F472B6'},
   otro:  {name:'Otro',              emoji:'📦',color:'#94A3B8'},
 };
 let wealthView='main',invDetailId=null,invEditId=null,invEntryKind='aporte',invEntryHid=null;
@@ -2847,11 +2924,9 @@ function openInvModal(id){
   invEditId=id||null;
   const h=id?invGet(id):null;
   document.getElementById('invType').innerHTML=Object.entries(INV_TYPES).map(([k,t])=>`<option value="${k}">${t.emoji} ${esc(t.name)}</option>`).join('');
-  const plats=[...new Set((state.investments||[]).map(x=>(x.platform||'').trim()).filter(Boolean))];
-  document.getElementById('invPlatList').innerHTML=plats.map(p=>`<option value="${esc(p)}">`).join('');
   document.getElementById('invModalTitle').textContent=h?'Editar inversión':'Nueva inversión';
   document.getElementById('invName').value=h?h.name:'';
-  document.getElementById('invPlatform').value=h?(h.platform||''):'';
+  invFillPlat(h?(h.platform||''):'');
   document.getElementById('invCurrency').value=h?h.currency:'ARS';
   document.getElementById('invType').value=h?h.type:'fci';
   document.getElementById('invVenc').value=h&&h.vencimiento?h.vencimiento:'';
@@ -2865,6 +2940,18 @@ function openInvModal(id){
   document.getElementById('invOverlay').classList.add('open');
   if(!h)setTimeout(()=>document.getElementById('invName').focus(),300);
 }
+function invFillPlat(sel){
+  const el=document.getElementById('invPlatform');
+  const names=(state.platforms||[]).map(p=>p.name);
+  if(sel&&!names.includes(sel))names.push(sel);
+  el.innerHTML='<option value="">Sin plataforma</option>'+names.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('')+'<option value="__new">➕ Nueva plataforma…</option>';
+  el.value=sel||'';
+  document.getElementById('invPlatNew').style.display='none';document.getElementById('invPlatNew').value='';
+}
+function invPlatChanged(){
+  const n=document.getElementById('invPlatNew'),isNew=document.getElementById('invPlatform').value==='__new';
+  n.style.display=isNew?'block':'none';if(isNew)n.focus();
+}
 function closeInvModal(){document.getElementById('invOverlay').classList.remove('open');invEditId=null;}
 function invMakeTx(h,kind,amount,date){
   const tx={id:Date.now()+Math.random(),type:kind==='aporte'?'expense':'income',amount,currency:h.currency,
@@ -2877,7 +2964,9 @@ function invMakeTx(h,kind,amount,date){
 function saveInv(){
   const name=document.getElementById('invName').value.trim();
   if(!name){alert('Ingresá un nombre.');return;}
-  const platform=document.getElementById('invPlatform').value.trim();
+  let platform=document.getElementById('invPlatform').value;
+  if(platform==='__new'){platform=document.getElementById('invPlatNew').value.trim();if(!platform){alert('Escribí el nombre de la plataforma.');return;}}
+  if(platform&&!state.platforms.some(p=>p.name===platform))state.platforms.push({name:platform,wallet:document.getElementById('invType').value==='billetera'});
   const currency=document.getElementById('invCurrency').value;
   const type=document.getElementById('invType').value;
   const venc=document.getElementById('invVenc').value;
@@ -2983,6 +3072,7 @@ function delInvEntry(hid,eid){
     else state.transactions=state.transactions.filter(t=>t.id!==e.txId);
   }
   h.entries=h.entries.filter(x=>x.id!==eid);
+  state.transactions.forEach(t=>{if(t.payFrom&&t.payFrom.eid===eid)delete t.payFrom;});
   saveState();updateAll();renderInvDetail();
 }
 
