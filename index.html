@@ -196,6 +196,10 @@ body{display:flex;flex-direction:column;max-width:430px;margin:0 auto;min-height
 /* ── SHEET (modal bottom) ── */
 .sheet-overlay{position:fixed;inset:0;background:rgba(10,10,30,.5);z-index:200;display:none;align-items:flex-end;justify-content:center;}
 .sheet-overlay.open{display:flex;}
+.txms{background:var(--white);border:1.5px solid var(--border);border-radius:12px;margin-bottom:7px;padding:0 12px;}
+.txms summary{font-size:12px;font-weight:600;padding:10px 0;cursor:pointer;color:var(--text);}
+.txms-chips{display:flex;flex-wrap:wrap;gap:6px;padding:0 0 10px;max-height:170px;overflow-y:auto;}
+.txms-chips .filter-chip{flex:none;}
 #invOverlay,#invEntryOverlay{z-index:210;}
 .sheet{background:var(--white);border-radius:24px 24px 0 0;width:100%;max-width:430px;max-height:90vh;overflow-y:auto;padding-bottom:16px;}
 .sheet-handle{width:36px;height:4px;background:var(--border);border-radius:2px;margin:10px auto 14px;}
@@ -472,10 +476,8 @@ body {
     </div>
     <div id="txSearchPanel" style="display:none;padding:0 14px 8px;">
       <input class="form-control" type="search" id="txSearchInput" placeholder="Buscar por descripción, nota, categoría o etiqueta…" oninput="txSearch=this.value;renderRecords()" style="margin-bottom:7px;">
-      <div class="form-row" style="margin-bottom:7px;">
-        <select class="form-control" id="txCatSel" onchange="txCat=this.value;renderRecords()"></select>
-        <select class="form-control" id="txTagSel" onchange="txTag=this.value;renderRecords()"></select>
-      </div>
+      <details class="txms" id="txCatBox"><summary id="txCatSum">Categorías: todas</summary><div class="txms-chips" id="txCatChips"></div></details>
+      <details class="txms" id="txTagBox"><summary id="txTagSum">Etiquetas: todas</summary><div class="txms-chips" id="txTagChips"></div></details>
       <label style="display:flex;align-items:center;gap:7px;font-size:11px;color:var(--text2);font-weight:600;"><input type="checkbox" id="txAllTime" onchange="txAllTime=this.checked;renderRecords()"> Buscar en todo el historial (ignora el mes/año elegido)</label>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:7px;">
         <span id="txResultInfo" style="font-size:11px;font-weight:700;color:var(--text2);"></span>
@@ -1293,7 +1295,7 @@ const INV_OUT_CAT='Inversión',INV_IN_CAT='Rescate de inversión';
 function isTransfer(tx){return !!tx&&((tx.type==='expense'&&tx.category===INV_OUT_CAT)||(tx.type==='income'&&tx.category===INV_IN_CAT));}
 let currentTxType='expense',currentTxTags=[],selectedCat=null;
 let txFilter='all',contentTab='records',currentPage='movements';
-let txSearch='',txCat='',txTag='',txAllTime=false,txPanelOpen=false;
+let txSearch='',txCats=[],txTags=[],txCatOpts=[],txTagOpts=[],txAllTime=false,txPanelOpen=false;
 let selectedBudgetCats=[],selectedBudgetColor=BUDGET_COLORS[0],editingBudgetId=null;
 const charts={};
 let deferredInstallPrompt=null;
@@ -1450,28 +1452,38 @@ function setTxFilter(f,el){txFilter=f;document.querySelectorAll('.filter-chip').
 // RECORDS
 // ══════════════════════════════════════════
 function normTxt(s){return String(s==null?'':s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');}
-function txFiltersActive(){return !!(txSearch.trim()||txCat||txTag);}
+function txFiltersActive(){return !!(txSearch.trim()||txCats.length||txTags.length);}
 function syncTxPanel(){
   const p=document.getElementById('txSearchPanel');if(!p)return;
   p.style.display=(contentTab==='records'&&txPanelOpen)?'block':'none';
   document.getElementById('fcSearch').classList.toggle('active',txPanelOpen||txFiltersActive());
 }
 function toggleTxSearch(){txPanelOpen=!txPanelOpen;syncTxPanel();if(txPanelOpen){fillTxFilterOptions();setTimeout(()=>document.getElementById('txSearchInput').focus(),50);}}
-function clearTxFilters(){txSearch='';txCat='';txTag='';txAllTime=false;document.getElementById('txSearchInput').value='';document.getElementById('txAllTime').checked=false;fillTxFilterOptions();renderRecords();syncTxPanel();}
+function clearTxFilters(){txSearch='';txCats=[];txTags=[];txAllTime=false;document.getElementById('txSearchInput').value='';document.getElementById('txAllTime').checked=false;fillTxFilterOptions();renderRecords();syncTxPanel();}
 function fillTxFilterOptions(){
-  const cats=[...new Set([...state.categories.expense.map(c=>c.name),...state.categories.income.map(c=>c.name),...state.transactions.map(t=>t.category)])].sort((a,b)=>a.localeCompare(b,'es'));
-  const tags=[...new Set([...(state.tags||[]),...state.transactions.flatMap(t=>t.tags||[])])].sort((a,b)=>a.localeCompare(b,'es'));
-  const cs=document.getElementById('txCatSel'),ts=document.getElementById('txTagSel');
-  cs.innerHTML='<option value="">Todas las categorías</option>'+cats.map(c=>`<option value="${esc(c)}"${c===txCat?' selected':''}>${esc(c)}</option>`).join('');
-  ts.innerHTML='<option value="">Todas las etiquetas</option>'+tags.map(t=>`<option value="${esc(t)}"${t===txTag?' selected':''}>#${esc(t)}</option>`).join('');
+  txCatOpts=[...new Set([...state.categories.expense.map(c=>c.name),...state.categories.income.map(c=>c.name),...state.transactions.map(t=>t.category)])].sort((a,b)=>a.localeCompare(b,'es'));
+  txTagOpts=[...new Set([...(state.tags||[]),...state.transactions.flatMap(t=>t.tags||[])])].sort((a,b)=>a.localeCompare(b,'es'));
+  txCats=txCats.filter(c=>txCatOpts.includes(c));txTags=txTags.filter(t=>txTagOpts.includes(t));
+  renderTxMS();
+}
+function renderTxMS(){
+  document.getElementById('txCatChips').innerHTML=txCatOpts.map((c,i)=>`<div class="filter-chip${txCats.includes(c)?' active':''}" onclick="toggleTxMS('c',${i})">${esc(c)}</div>`).join('');
+  document.getElementById('txTagChips').innerHTML=txTagOpts.map((t,i)=>`<div class="filter-chip${txTags.includes(t)?' active':''}" onclick="toggleTxMS('t',${i})">#${esc(t)}</div>`).join('');
+  document.getElementById('txCatSum').textContent=txCats.length?'Categorías ('+txCats.length+'): '+txCats.join(', '):'Categorías: todas';
+  document.getElementById('txTagSum').textContent=txTags.length?'Etiquetas ('+txTags.length+'): '+txTags.map(t=>'#'+t).join(', '):'Etiquetas: todas';
+}
+function toggleTxMS(k,i){
+  const arr=k==='c'?txCats:txTags,v=(k==='c'?txCatOpts:txTagOpts)[i],j=arr.indexOf(v);
+  if(j>=0)arr.splice(j,1);else arr.push(v);
+  renderTxMS();renderRecords();
 }
 function renderRecords(){
   const active=txFiltersActive();
   const q=normTxt(txSearch.trim());
   const base=(active&&txAllTime)?state.transactions:filterByPeriod(state.transactions);
   let txs=base.filter(tx=>(txFilter==='all'||tx.type===txFilter)
-    &&(!txCat||tx.category===txCat)
-    &&(!txTag||(tx.tags||[]).includes(txTag))
+    &&(!txCats.length||txCats.includes(tx.category))
+    &&(!txTags.length||(tx.tags||[]).some(t=>txTags.includes(t)))
     &&(!q||normTxt([tx.description,tx.notes,tx.category,...(tx.tags||[])].join(' ')).includes(q)));
   txs=[...txs].sort((a,b)=>b.date.localeCompare(a.date));
   const container=document.getElementById('recordsView');
