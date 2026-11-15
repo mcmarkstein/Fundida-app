@@ -3200,7 +3200,7 @@ function saveInvMulti(){
 
 // ── Exportar / importar inversiones (JSON) ──
 function exportInvestments(){
-  const data={fundida:'investments',version:1,exportedAt:new Date().toISOString(),investments:state.investments||[]};
+  const data={fundida:'investments',version:1,exportedAt:new Date().toISOString(),platforms:state.platforms||[],investments:state.investments||[]};
   const a=document.createElement('a');
   a.href=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));
   a.download='fundida-inversiones-'+invToday()+'.json';a.click();
@@ -3229,6 +3229,10 @@ function importInvestmentsFile(ev){
       if(!list.length){alert('El archivo no tiene inversiones válidas.');return;}
       if(!confirm(`Se van a agregar ${list.length} inversiones a las que ya tenés. ¿Continuar?`))return;
       state.investments=(state.investments||[]).concat(list);
+      if(!Array.isArray(state.platforms))state.platforms=[];
+      const addPlat=(n,w)=>{n=String(n||'').trim().slice(0,60);if(!n)return;const ex=state.platforms.find(p=>p.name.toLowerCase()===n.toLowerCase());if(ex){if(w)ex.wallet=true;}else state.platforms.push({name:n,wallet:!!w});};
+      (Array.isArray(d.platforms)?d.platforms:[]).forEach(p=>{if(p&&typeof p.name==='string')addPlat(p.name,p.wallet===true);});
+      list.forEach(h=>addPlat(h.platform,h.type==='billetera'));
       saveState();closeSettings();updateAll();
       alert(`✅ Se importaron ${list.length} inversiones. Las ves en Riqueza → Inversiones.`);
     }catch(err){alert('No pude leer el archivo. Tiene que ser un JSON exportado desde Fundida.');}
