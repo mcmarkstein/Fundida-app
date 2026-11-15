@@ -98,6 +98,8 @@ body{display:flex;flex-direction:column;max-width:430px;margin:0 auto;min-height
 .tx-amount{font-weight:800;font-size:14px;}
 .tx-amount.income{color:var(--income);}
 .tx-amount.expense{color:var(--expense);}
+.tx-amount.transfer{color:var(--accent);}
+.hero-invest{font-size:10px;font-weight:600;opacity:.9;margin-top:9px;display:none;}
 .tx-orig{font-size:9px;color:var(--text3);margin-top:1px;}
 .empty-state{text-align:center;padding:38px 20px;color:var(--text3);}
 .empty-state .icon{font-size:42px;margin-bottom:10px;}
@@ -414,7 +416,7 @@ body {
 <!-- PERIOD BAR -->
 <div class="period-bar" id="periodBar">
   <div class="period-tabs">
-    <div class="period-tab" onclick="setPeriodType('total')">Todo</div>
+    <div class="period-tab" id="ptTotal" onclick="setPeriodType('total')">Todo</div>
     <div class="period-tab active" onclick="setPeriodType('month')">Mes</div>
     <div class="period-tab" onclick="setPeriodType('year')">Año</div>
   </div>
@@ -454,6 +456,7 @@ body {
           <div class="hero-pill-val" id="heroExpense">$ 0</div>
         </div>
       </div>
+      <div class="hero-invest" id="heroInvest"></div>
     </div>
     <div class="content-tabs">
       <div class="content-tab active" id="tabRecords" onclick="setContentTab('records')">📋 Registros</div>
@@ -464,6 +467,19 @@ body {
       <div class="filter-chip active" onclick="setTxFilter('all',this)">Todos</div>
       <div class="filter-chip" onclick="setTxFilter('income',this)">Ingresos</div>
       <div class="filter-chip" onclick="setTxFilter('expense',this)">Gastos</div>
+      <div class="filter-chip" id="fcSearch" onclick="toggleTxSearch()">🔍 Buscar / filtrar</div>
+    </div>
+    <div id="txSearchPanel" style="display:none;padding:0 14px 8px;">
+      <input class="form-control" type="search" id="txSearchInput" placeholder="Buscar por descripción, nota, categoría o etiqueta…" oninput="txSearch=this.value;renderRecords()" style="margin-bottom:7px;">
+      <div class="form-row" style="margin-bottom:7px;">
+        <select class="form-control" id="txCatSel" onchange="txCat=this.value;renderRecords()"></select>
+        <select class="form-control" id="txTagSel" onchange="txTag=this.value;renderRecords()"></select>
+      </div>
+      <label style="display:flex;align-items:center;gap:7px;font-size:11px;color:var(--text2);font-weight:600;"><input type="checkbox" id="txAllTime" onchange="txAllTime=this.checked;renderRecords()"> Buscar en todo el historial (ignora el mes/año elegido)</label>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:7px;">
+        <span id="txResultInfo" style="font-size:11px;font-weight:700;color:var(--text2);"></span>
+        <button onclick="clearTxFilters()" style="background:none;border:none;color:var(--accent);font-size:11px;font-weight:800;cursor:pointer;font-family:'Poppins',sans-serif;">Limpiar</button>
+      </div>
     </div>
     <div id="recordsView" class="tx-section"></div>
     <div id="recurringView" style="display:none;">
@@ -579,7 +595,7 @@ body {
       </div>
       <div class="card">
         <div class="card-title">Flujo de Caja Mensual</div>
-        <div class="card-subtitle">Ingresos, gastos y neto por mes</div>
+        <div class="card-subtitle">Ingresos, gastos y neto por mes (sin aportes a inversión)</div>
         <div class="chart-wrap-200"><canvas id="chartCashflow"></canvas></div>
       </div>
       <div class="card">
@@ -603,6 +619,15 @@ body {
         </div>
       </div>
       <div class="summary-section" style="margin-top:11px;">
+        <details class="card" id="invHelp" style="padding:0;">
+          <summary style="cursor:pointer;padding:13px 15px;font-size:12px;font-weight:800;list-style:none;display:flex;justify-content:space-between;align-items:center;">💡 ¿Cómo se usa esta sección? <span style="color:var(--text3);font-size:11px;">tocá para ver</span></summary>
+          <div style="padding:0 15px 14px;font-size:11px;color:var(--text2);line-height:1.7;">
+            <b style="color:var(--text);">Si invertís plata nueva</b> (ej. USD 1.000 en varios ETF o CEDEARs): tocá <b>Aporte repartido</b>, elegí la plataforma, poné cuánto va a cada activo y dejá tildado «registrar como Inversión». Tu dinero disponible baja y tus inversiones suben en lo mismo, así que el patrimonio no cambia, y tampoco se cuenta como gasto del mes.<br><br>
+            <b style="color:var(--text);">Para ver si ganás o perdés:</b> una vez por mes tocá <b>Actualizar valores</b> y cargá cuánto vale hoy cada inversión (o la cartera entera, si preferís llevarla en una sola línea). La ganancia es valor actual menos lo invertido.<br><br>
+            <b style="color:var(--text);">No cargues ganancias ni pérdidas</b> como ingresos o gastos: se calculan solas al actualizar el valor.<br><br>
+            <b style="color:var(--text);">El detalle fino</b> (precio por acción, comisiones, impuestos) queda en tu broker o banco. Acá llevás un control simple y aproximado.
+          </div>
+        </details>
         <div class="card" id="invDonutCard">
           <div class="card-title">Distribución</div>
           <div class="card-subtitle">Por tipo de inversión</div>
@@ -611,7 +636,10 @@ body {
             <div class="donut-legend" id="invTypeLegend"></div>
           </div>
         </div>
-        <button class="btn-secondary" id="invBulkBtn" onclick="openInvBulk()" style="margin-bottom:4px;">🔄 Actualizar valores de todas</button>
+        <div id="invBtnRow" style="display:flex;gap:8px;margin-bottom:4px;">
+          <button class="btn-secondary" onclick="openInvMulti()">➕ Aporte repartido</button>
+          <button class="btn-secondary" onclick="openInvBulk()">🔄 Actualizar valores</button>
+        </div>
         <div id="invList"></div>
         <button class="btn-add-budget" onclick="openInvModal()" style="width:100%;margin:12px 0 13px;">＋ Agregar inversión</button>
       </div>
@@ -723,9 +751,10 @@ body {
           <label class="form-label">Período</label>
           <select class="form-control" id="budgetPeriod">
             <option value="month">Mensual</option>
-            <option value="year">Anual</option>
-            <option value="all">Sin límite de tiempo</option>
+            <option value="year">Anual (el límite es para todo el año)</option>
+            <option value="all">Total acumulado (sin fecha)</option>
           </select>
+          <div style="font-size:10px;color:var(--text2);margin-top:5px;line-height:1.5;">Mensual: el límite es por mes (en la vista anual se multiplica por 12). Anual: el límite es de todo el año y en la vista mensual ves lo acumulado hasta ese mes.</div>
         </div>
       </div>
 
@@ -889,6 +918,7 @@ body {
             <tbody id="importPreviewBody"></tbody>
           </table>
         </div>
+        <label style="display:flex;gap:9px;align-items:flex-start;font-size:11px;color:var(--text2);line-height:1.5;margin-top:12px;background:var(--bg);border-radius:11px;padding:10px 12px;"><input type="checkbox" id="importReplace" style="margin-top:3px;flex-shrink:0;"><span>Reemplazar mis movimientos actuales por los del archivo. No toca presupuestos, programados ni inversiones. Sin tildar, se suman a los que ya tenés.</span></label>
         <button class="btn-primary" id="importConfirmBtn" onclick="confirmImport()" style="margin-top:12px;">✅ Importar movimientos</button>
       </div>
 
@@ -1064,7 +1094,7 @@ body {
         </div>
         <div class="chk-row">
           <input type="checkbox" id="invInitTx">
-          <label for="invInitTx">Descontarlo de mi dinero (registra un gasto «Inversión»). Dejalo sin marcar si ya lo tenías invertido antes de usar la app.</label>
+          <label for="invInitTx">Descontarlo de mi dinero (se registra como «Inversión», no como gasto). Dejalo sin marcar si esa plata nunca estuvo en la app.</label>
         </div>
       </div>
       <div class="form-row">
@@ -1123,6 +1153,42 @@ body {
   </div>
 </div>
 
+<!-- ═══ SHEET: APORTE REPARTIDO ═══ -->
+<div class="sheet-overlay" id="invMultiOverlay" onclick="if(event.target===this)closeInvMulti()">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">Aporte repartido</div>
+    <div class="sheet-body">
+      <div style="font-size:11px;color:var(--text2);line-height:1.6;margin-bottom:10px;">Cuánto pusiste en cada activo de una misma plataforma. Si tenés objetivo % cargado, podés repartir el total automáticamente.</div>
+      <div class="form-group">
+        <label class="form-label">Plataforma</label>
+        <select class="form-control" id="invMultiSel" onchange="renderInvMultiRows()"></select>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Total a invertir</label>
+          <input class="form-control" type="number" inputmode="decimal" step="any" min="0" id="invMultiTotalIn" placeholder="Ej: 1000">
+        </div>
+        <div class="form-group">
+          <label class="form-label">&nbsp;</label>
+          <button class="btn-secondary" style="padding:10px;" onclick="invMultiSplit()">Repartir por objetivo %</button>
+        </div>
+      </div>
+      <div id="invMultiRows"></div>
+      <div id="invMultiSum" style="font-size:12px;font-weight:800;text-align:right;margin:6px 0 10px;"></div>
+      <div class="form-group">
+        <label class="form-label">Fecha</label>
+        <input class="form-control" type="date" id="invMultiDate">
+      </div>
+      <div class="chk-row">
+        <input type="checkbox" id="invMultiTx" checked>
+        <label for="invMultiTx">Registrar un solo movimiento «Inversión» por el total (baja mi dinero disponible, no cuenta como gasto)</label>
+      </div>
+      <button class="btn-primary" onclick="saveInvMulti()">Guardar aporte</button>
+    </div>
+  </div>
+</div>
+
 <!-- ═══ SHEET: ACTUALIZAR VALORES ═══ -->
 <div class="sheet-overlay" id="invBulkOverlay" onclick="if(event.target===this)closeInvBulk()">
   <div class="sheet">
@@ -1172,6 +1238,8 @@ const DEFAULT_CATS = {
     {name:'Alquileres',     emoji:'🏘️',color:'#06D6A0'},
     {name:'Préstamo',       emoji:'🤝',color:'#F59E0B'},
     {name:'Ingreso extra',  emoji:'⭐',color:'#FF8C42'},
+    {name:'Viajes',         emoji:'✈️',color:'#00B4D8'},
+    {name:'Rescate de inversión',emoji:'↩️',color:'#6C63FF'},
     {name:'Regalo',         emoji:'🎁',color:'#A855F7'},
     {name:'Otros',          emoji:'📦',color:'#94A3B8'},
   ]
@@ -1182,15 +1250,21 @@ const BUDGET_COLORS=['#6C63FF','#0DC98A','#FF4D6D','#F59E0B','#00B4D8','#A855F7'
 // ══════════════════════════════════════════
 // STATE
 // ══════════════════════════════════════════
+const DEFAULT_TAGS=['Sociales','Trabajo','Ups','Necesario','Extraordinario','Gasto hormiga','programado','inversión','Broker','Banco','Billetera virtual','personal','familia','fijo','variable','deducible','urgente'];
 let state={
   transactions:[],budgets:[],recurring:[],investments:[],
   categories:JSON.parse(JSON.stringify(DEFAULT_CATS)),
-  tags:['personal','familia','trabajo','fijo','variable','deducible','urgente'],
+  tags:['Sociales','Trabajo','Ups','Necesario','Extraordinario','Gasto hormiga','programado','inversión','Broker','Banco','Billetera virtual','personal','familia','fijo','variable','deducible','urgente'],
   mepRate:1200,displayCurrency:'ARS',
-  periodType:'month',periodOffset:0,
+  periodType:'month',periodOffset:0,budgetPeriodType:'month',budgetPeriodOffset:0,
 };
+// Aportes y rescates de inversión: pasan plata entre "dinero" e "inversiones".
+// Bajan/suben el dinero disponible pero NO son un gasto ni un ingreso real.
+const INV_OUT_CAT='Inversión',INV_IN_CAT='Rescate de inversión';
+function isTransfer(tx){return !!tx&&((tx.type==='expense'&&tx.category===INV_OUT_CAT)||(tx.type==='income'&&tx.category===INV_IN_CAT));}
 let currentTxType='expense',currentTxTags=[],selectedCat=null;
 let txFilter='all',contentTab='records',currentPage='movements';
+let txSearch='',txCat='',txTag='',txAllTime=false,txPanelOpen=false;
 let selectedBudgetCats=[],selectedBudgetColor=BUDGET_COLORS[0],editingBudgetId=null;
 const charts={};
 let deferredInstallPrompt=null;
@@ -1198,6 +1272,22 @@ let deferredInstallPrompt=null;
 function loadState(){
   try{const s=localStorage.getItem('fundida_v4');if(s)state={...state,...JSON.parse(s)};}catch(e){}
   if(!Array.isArray(state.investments))state.investments=[];
+  migrateDefaults();
+}
+// Una sola vez por dispositivo: suma las categorías/etiquetas nuevas por defecto y las que ya usás en tus movimientos
+function migrateDefaults(){
+  if(state.migratedV5)return;
+  const pal=['#FF4D6D','#FF8C42','#F59E0B','#0DC98A','#6C63FF','#00B4D8','#A855F7','#14B8A6'];
+  ['expense','income'].forEach(type=>{
+    const list=state.categories[type];
+    DEFAULT_CATS[type].forEach(d=>{if(!list.some(c=>c.name===d.name))list.push({...d});});
+    state.transactions.forEach(tx=>{if(tx.type===type&&tx.category&&!list.some(c=>c.name===tx.category))list.push({name:tx.category,emoji:'📦',color:pal[list.length%pal.length]});});
+  });
+  const tg=state.tags;
+  JSON.parse(JSON.stringify(DEFAULT_TAGS)).forEach(t=>{if(!tg.includes(t))tg.push(t);});
+  state.transactions.forEach(tx=>(tx.tags||[]).forEach(t=>{if(t&&!tg.includes(t))tg.push(t);}));
+  state.migratedV5=true;
+  try{localStorage.setItem('fundida_v4',JSON.stringify(state));}catch(e){}
 }
 function saveState(){try{localStorage.setItem('fundida_v4',JSON.stringify(state));}catch(e){}}
 
@@ -1255,16 +1345,29 @@ function getCat(type,name){return state.categories[type].find(c=>c.name===name)|
 // ══════════════════════════════════════════
 // PERIOD
 // ══════════════════════════════════════════
-function setPeriodType(t){state.periodType=t;state.periodOffset=0;document.querySelectorAll('.period-tab').forEach((el,i)=>el.classList.toggle('active',['total','month','year'][i]===t));updateAll();}
-function shiftPeriod(d){if(state.periodType==='total')return;state.periodOffset+=d;updateAll();}
+function curPeriod(){return currentPage==='budgets'?{type:state.budgetPeriodType||'month',offset:state.budgetPeriodOffset||0}:{type:state.periodType,offset:state.periodOffset};}
+function syncPeriodTabs(){
+  const t=curPeriod().type;
+  document.querySelectorAll('.period-tab').forEach((el,i)=>el.classList.toggle('active',['total','month','year'][i]===t));
+  const pt=document.getElementById('ptTotal');if(pt)pt.style.display=currentPage==='budgets'?'none':'';
+}
+function setPeriodType(t){
+  if(currentPage==='budgets'){if(t==='total')return;state.budgetPeriodType=t;state.budgetPeriodOffset=0;}
+  else{state.periodType=t;state.periodOffset=0;}
+  saveState();syncPeriodTabs();updateAll();
+}
+function shiftPeriod(d){
+  if(currentPage==='budgets'){state.budgetPeriodOffset=(state.budgetPeriodOffset||0)+d;saveState();updateAll();return;}
+  if(state.periodType==='total')return;state.periodOffset+=d;updateAll();
+}
 function getPeriodLabel(){
-  const now=new Date();
-  if(state.periodType==='total')return'Historial Completo';
-  if(state.periodType==='month'){
-    const d=new Date(now.getFullYear(),now.getMonth()+state.periodOffset,1);
+  const now=new Date(),p=curPeriod();
+  if(p.type==='total')return'Historial Completo';
+  if(p.type==='month'){
+    const d=new Date(now.getFullYear(),now.getMonth()+p.offset,1);
     return['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][d.getMonth()]+' '+d.getFullYear();
   }
-  return'Año '+(now.getFullYear()+state.periodOffset);
+  return'Año '+(now.getFullYear()+p.offset);
 }
 function filterByPeriod(txs){
   if(state.periodType==='total')return txs;
@@ -1290,6 +1393,7 @@ function showPage(page){
   });
   document.getElementById('navSettings').classList.remove('active');
   document.getElementById('periodBar').style.display=(page==='wealth')?'none':'block';
+  syncPeriodTabs();
   updateAll();
 }
 
@@ -1305,6 +1409,7 @@ function setContentTab(tab){
   document.getElementById('recurringView').style.display=tab==='recurring'?'block':'none';
   document.getElementById('summaryView').style.display=tab==='summary'?'block':'none';
   document.getElementById('filterRow').style.display=tab==='records'?'flex':'none';
+  syncTxPanel();
   if(tab==='summary') renderSummaryCharts();
   if(tab==='recurring') renderRecurring();
 }
@@ -1313,41 +1418,73 @@ function setTxFilter(f,el){txFilter=f;document.querySelectorAll('.filter-chip').
 // ══════════════════════════════════════════
 // RECORDS
 // ══════════════════════════════════════════
+function normTxt(s){return String(s==null?'':s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');}
+function txFiltersActive(){return !!(txSearch.trim()||txCat||txTag);}
+function syncTxPanel(){
+  const p=document.getElementById('txSearchPanel');if(!p)return;
+  p.style.display=(contentTab==='records'&&txPanelOpen)?'block':'none';
+  document.getElementById('fcSearch').classList.toggle('active',txPanelOpen||txFiltersActive());
+}
+function toggleTxSearch(){txPanelOpen=!txPanelOpen;syncTxPanel();if(txPanelOpen){fillTxFilterOptions();setTimeout(()=>document.getElementById('txSearchInput').focus(),50);}}
+function clearTxFilters(){txSearch='';txCat='';txTag='';txAllTime=false;document.getElementById('txSearchInput').value='';document.getElementById('txAllTime').checked=false;fillTxFilterOptions();renderRecords();syncTxPanel();}
+function fillTxFilterOptions(){
+  const cats=[...new Set([...state.categories.expense.map(c=>c.name),...state.categories.income.map(c=>c.name),...state.transactions.map(t=>t.category)])].sort((a,b)=>a.localeCompare(b,'es'));
+  const tags=[...new Set([...(state.tags||[]),...state.transactions.flatMap(t=>t.tags||[])])].sort((a,b)=>a.localeCompare(b,'es'));
+  const cs=document.getElementById('txCatSel'),ts=document.getElementById('txTagSel');
+  cs.innerHTML='<option value="">Todas las categorías</option>'+cats.map(c=>`<option value="${esc(c)}"${c===txCat?' selected':''}>${esc(c)}</option>`).join('');
+  ts.innerHTML='<option value="">Todas las etiquetas</option>'+tags.map(t=>`<option value="${esc(t)}"${t===txTag?' selected':''}>#${esc(t)}</option>`).join('');
+}
 function renderRecords(){
-  const periodTxs=filterByPeriod(state.transactions);
-  let txs=periodTxs.filter(tx=>txFilter==='all'||tx.type===txFilter);
+  const active=txFiltersActive();
+  const q=normTxt(txSearch.trim());
+  const base=(active&&txAllTime)?state.transactions:filterByPeriod(state.transactions);
+  let txs=base.filter(tx=>(txFilter==='all'||tx.type===txFilter)
+    &&(!txCat||tx.category===txCat)
+    &&(!txTag||(tx.tags||[]).includes(txTag))
+    &&(!q||normTxt([tx.description,tx.notes,tx.category,...(tx.tags||[])].join(' ')).includes(q)));
   txs=[...txs].sort((a,b)=>b.date.localeCompare(a.date));
   const container=document.getElementById('recordsView');
-  if(!txs.length){container.innerHTML=`<div class="empty-state"><div class="icon">📭</div><p>Sin movimientos en este período.<br>Tocá <strong>+</strong> para agregar uno.</p></div>`;return;}
+  syncTxPanel();
+  const info=document.getElementById('txResultInfo');
+  if(info){
+    if(active){const net=txs.reduce((a,t)=>a+(t.type==='income'?1:-1)*toDisp(t.amount,t.currency),0);
+      info.textContent=`${txs.length} resultado${txs.length!==1?'s':''} · neto ${fmtS(net,state.displayCurrency)}`;}
+    else info.textContent='';
+  }
+  if(!txs.length){container.innerHTML=active
+    ?`<div class="empty-state"><div class="icon">🔍</div><p>No hay movimientos con esos filtros.${txAllTime?'':'<br>Probá buscar en todo el historial.'}</p></div>`
+    :`<div class="empty-state"><div class="icon">📭</div><p>Sin movimientos en este período.<br>Tocá <strong>+</strong> para agregar uno.</p></div>`;return;}
   const groups={};txs.forEach(tx=>{(groups[tx.date]=groups[tx.date]||[]).push(tx);});
   const dc=state.displayCurrency;
   container.innerHTML=Object.keys(groups).sort().reverse().map(date=>{
     const g=groups[date];
     const[y,m,d]=date.split('-');
     const label=`${parseInt(d)} ${['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'][parseInt(m)-1]} ${y}`;
-    let net=0;g.forEach(tx=>{const v=toDisp(tx.amount,tx.currency);net+=tx.type==='income'?v:-v;});
+    let net=0;g.forEach(tx=>{if(isTransfer(tx))return;const v=toDisp(tx.amount,tx.currency);net+=tx.type==='income'?v:-v;});
+    const onlyT=g.every(isTransfer);
     return`<div class="tx-date-group">
       <div class="tx-date-header">
         <div class="tx-date-label">${label}</div>
-        <div class="tx-date-net" style="color:${net>=0?'var(--income)':'var(--expense)'}">${fmtS(net,dc)}</div>
+        <div class="tx-date-net" style="color:${net>=0?'var(--income)':'var(--expense)'}">${onlyT?'':fmtS(net,dc)}</div>
       </div>
       ${g.map(tx=>{
         const cat=getCat(tx.type,tx.category);
-        const sign=tx.type==='income'?'+':'-';
+        const tr=isTransfer(tx);
+        const sign=tr?(tx.type==='expense'?'→ ':'← '):(tx.type==='income'?'+':'-');
         const disp=toDisp(tx.amount,tx.currency);
         const showOrig=tx.currency!==dc;
         return`<div class="tx-card" onclick="openEditTx(${tx.id})">
           <div class="tx-cat-icon" style="background:${cat.color}20;">${cat.emoji}</div>
           <div class="tx-info">
-            <div class="tx-name">${tx.description}</div>
+            <div class="tx-name">${esc(tx.description)}</div>
             <div class="tx-meta">
               <span style="color:${cat.color};font-weight:700;font-size:9px;">${cat.name}</span>
-              ${tx.tags.map(t=>`<span class="tx-tag">${t}</span>`).join('')}
+              ${(tx.tags||[]).map(t=>`<span class="tx-tag">${esc(t)}</span>`).join('')}
               ${tx.notes?`<span class="tx-tag" style="font-style:italic;">${tx.notes.substring(0,18)}</span>`:''}
             </div>
           </div>
           <div class="tx-right">
-            <div class="tx-amount ${tx.type}">${sign}${fmt(disp,dc)}</div>
+            <div class="tx-amount ${tr?'transfer':tx.type}">${sign}${fmt(disp,dc)}</div>
             ${showOrig?`<div class="tx-orig">${tx.amount.toLocaleString('es-AR')} ${tx.currency}</div>`:''}
           </div>
         </div>`;
@@ -1433,6 +1570,8 @@ function saveEditTx(){
 function deleteFromEdit(){
   if(!editingTxId) return;
   if(!confirm('¿Eliminar este movimiento?')) return;
+  const gone=state.transactions.find(t=>t.id===editingTxId);
+  if(gone&&gone.recurringId){const rec=(state.recurring||[]).find(r=>r.id===gone.recurringId);if(rec)rec.skipped=[...new Set([...(rec.skipped||[]),mk(gone.date)])];}
   state.transactions=state.transactions.filter(t=>t.id!==editingTxId);
   saveState(); closeEditTx(); updateAll();
 }
@@ -1443,8 +1582,10 @@ function deleteFromEdit(){
 function updateHero(){
   const periodTxs=filterByPeriod(state.transactions);
   const dc=state.displayCurrency;
-  let inc=0,exp=0;
-  periodTxs.forEach(tx=>{const v=toDisp(tx.amount,tx.currency);if(tx.type==='income')inc+=v;else exp+=v;});
+  let inc=0,exp=0,inv=0;
+  periodTxs.forEach(tx=>{const v=toDisp(tx.amount,tx.currency);if(isTransfer(tx)){inv+=tx.type==='expense'?v:-v;return;}if(tx.type==='income')inc+=v;else exp+=v;});
+  const hi=document.getElementById('heroInvest');
+  if(hi){hi.style.display=Math.abs(inv)>0.5?'block':'none';hi.textContent=(inv>=0?'📈 Aportado a inversiones: ':'📈 Rescatado de inversiones: ')+fmt(Math.abs(inv),dc)+' · no cuenta como gasto';}
   document.getElementById('heroIncome').textContent=fmt(inc,dc);
   document.getElementById('heroExpense').textContent=fmt(exp,dc);
   document.getElementById('heroBalance').textContent=fmtS(inc-exp,dc);
@@ -1480,7 +1621,7 @@ function renderSummaryCharts(){
   // Build data depending on mode (cat vs tag) and flow (expense vs income)
   const dataMap={};
   const countMap={};
-  p.filter(tx=>tx.type===sumFlow).forEach(tx=>{
+  p.filter(tx=>tx.type===sumFlow&&!isTransfer(tx)).forEach(tx=>{
     const v=toDisp(tx.amount,tx.currency);
     const keys = sumMode==='cat' ? [tx.category] : (tx.tags.length ? tx.tags : ['Sin etiqueta']);
     keys.forEach(k=>{
@@ -1503,7 +1644,7 @@ function renderSummaryCharts(){
   // Monthly bars
   const allM=[...new Set(state.transactions.map(t=>mk(t.date)))].sort().slice(-6);
   const incA=[],expA=[];
-  allM.forEach(m=>{let i=0,e=0;state.transactions.forEach(tx=>{if(mk(tx.date)!==m)return;const v=toDisp(tx.amount,tx.currency);if(tx.type==='income')i+=v;else e+=v;});incA.push(i);expA.push(e);});
+  allM.forEach(m=>{let i=0,e=0;state.transactions.forEach(tx=>{if(mk(tx.date)!==m||isTransfer(tx))return;const v=toDisp(tx.amount,tx.currency);if(tx.type==='income')i+=v;else e+=v;});incA.push(i);expA.push(e);});
   destroyChart('chartMonthly');
   if(allM.length){const ctx=document.getElementById('chartMonthly').getContext('2d');
     charts['chartMonthly']=new Chart(ctx,{type:'bar',data:{labels:allM.map(mlbl),datasets:[{label:'Ingresos',data:incA,backgroundColor:'#0DC98A',borderRadius:6,borderSkipped:false},{label:'Gastos',data:expA,backgroundColor:'#FF4D6D',borderRadius:6,borderSkipped:false}]},
@@ -1561,16 +1702,33 @@ function renderDonut(canvasId,data,legendId,type,dc,mode){
 // ══════════════════════════════════════════
 // BUDGETS
 // ══════════════════════════════════════════
-function getBudgetSpent(b){
-  const now=new Date();
-  const viewed=new Date(now.getFullYear(),now.getMonth()+state.periodOffset,1);
-  const viewedMk=`${viewed.getFullYear()}-${String(viewed.getMonth()+1).padStart(2,'0')}`;
-  return state.transactions.filter(tx=>{
-    if(tx.type!=='expense')return false;
-    if(b.categories.length&&!b.categories.includes(tx.category))return false;
-    return mk(tx.date)===viewedMk;
-  }).reduce((sum,tx)=>sum+toDisp(tx.amount,tx.currency),0);
+const BM_ABBR=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+function budgetView(){
+  const now=new Date(),off=state.budgetPeriodOffset||0;
+  if((state.budgetPeriodType||'month')==='year')return{type:'year',y:now.getFullYear()+off,m:11};
+  const d=new Date(now.getFullYear(),now.getMonth()+off,1);
+  return{type:'month',y:d.getFullYear(),m:d.getMonth()};
 }
+// Mensual: gasto del mes (en la vista anual: gasto del año contra límite × 12)
+// Anual: límite de TODO el año; en la vista mensual se ve lo acumulado desde enero hasta ese mes
+function getBudgetCalc(b){
+  const v=budgetView(),per=b.period||'month';
+  const endKey=`${v.y}-${String(v.m+1).padStart(2,'0')}`;
+  let limit=toDisp(b.limit,b.currency||'ARS'),kind,test;
+  if(v.type==='month'){
+    if(per==='month'){kind='month';test=t=>mk(t.date)===endKey;}
+    else if(per==='year'){kind='acc';test=t=>mk(t.date)>=`${v.y}-01`&&mk(t.date)<=endKey;}
+    else{kind='acc';test=t=>mk(t.date)<=endKey;}
+  }else{
+    if(per==='month'){kind='year12';limit*=12;test=t=>t.date.startsWith(String(v.y));}
+    else if(per==='year'){kind='year';test=t=>t.date.startsWith(String(v.y));}
+    else{kind='acc';test=t=>mk(t.date)<=`${v.y}-12`;}
+  }
+  const spent=state.transactions.filter(t=>t.type==='expense'&&t.date&&(b.categories.length?b.categories.includes(t.category):!isTransfer(t))&&test(t))
+    .reduce((a,t)=>a+toDisp(t.amount,t.currency),0);
+  return{spent,limit,kind,v,inHero:kind!=='acc'};
+}
+function getBudgetSpent(b){return getBudgetCalc(b).spent;}
 function renderBudgets(){
   const dc=state.displayCurrency;
   const list=document.getElementById('budgetList');
@@ -1582,22 +1740,28 @@ function renderBudgets(){
     document.getElementById('budgetHeroPct').textContent='0% utilizado';
     return;
   }
-  let tU=0,tL=0;
-  list.innerHTML=state.budgets.map(b=>{
-    const spent=getBudgetSpent(b);
-    const limit=toDisp(b.limit,b.currency||'ARS');
-    tU+=spent;tL+=limit;
+  let tU=0,tL=0;const v=budgetView();
+  const items=state.budgets.map(b=>({b,c:getBudgetCalc(b)}));
+  items.forEach(({c})=>{if(c.inHero){tU+=c.spent;tL+=c.limit;}});
+  const card=({b,c})=>{
+    const {spent,limit,kind}=c;
     const pct=limit>0?Math.min(spent/limit*100,100):0;
     const over=spent>limit,warn=pct>=80&&!over;
     const barColor=over?'#FF4D6D':warn?'#F59E0B':b.color;
     const stCls=over?'over':warn?'warn':'ok';
-    const stTxt=over?`⚠️ Excedido ${fmt(spent-limit,dc)}`:warn?`⚡ ${Math.round(pct)}% usado`:`✓ Disponible ${fmt(limit-spent,dc)}`;
+    let stTxt=over?`⚠️ Excedido ${fmt(spent-limit,dc)}`:warn?`⚡ ${Math.round(pct)}% usado`:`✓ Disponible ${fmt(limit-spent,dc)}`;
+    if(kind==='acc'&&(b.period||'month')==='year'&&limit>0){
+      const ideal=Math.round((v.m+1)/12*100);
+      stTxt+=` · a esta altura del año correspondería ~${ideal}%`;
+    }
     const catSub=b.categories.length?b.categories.slice(0,3).join(', ')+(b.categories.length>3?'…':''):'Todos los gastos';
+    const perTxt=kind==='month'?'Mensual':kind==='year12'?'Mensual × 12':kind==='year'?'Anual':(b.period==='year'?`Anual · acumulado ene–${BM_ABBR[v.m]}`:'Total acumulado');
+    const limTxt=(kind==='acc'||kind==='year')?`de ${fmt(limit,dc)} anual`:`de ${fmt(limit,dc)}`;
     return`<div class="budget-item">
       <div class="budget-item-top">
         <div class="budget-item-icon" style="background:${b.color}1A;">${b.emoji}</div>
-        <div class="budget-item-info"><div class="budget-item-name">${b.name}</div><div class="budget-item-sub">${catSub} · ${b.period==='month'?'Mensual':b.period==='year'?'Anual':'Sin límite'}</div></div>
-        <div class="budget-item-right"><div class="budget-item-used" style="color:${barColor}">${fmt(spent,dc)}</div><div class="budget-item-limit">de ${fmt(limit,dc)}</div></div>
+        <div class="budget-item-info"><div class="budget-item-name">${esc(b.name)}</div><div class="budget-item-sub">${esc(catSub)} · ${perTxt}</div></div>
+        <div class="budget-item-right"><div class="budget-item-used" style="color:${barColor}">${fmt(spent,dc)}</div><div class="budget-item-limit">${(b.period==='all'&&kind==='acc')?'acumulado de '+fmt(limit,dc):limTxt}</div></div>
       </div>
       <div class="budget-bar"><div class="budget-bar-fill" style="width:${pct}%;background:${barColor};"></div></div>
       <div class="budget-status ${stCls}">${stTxt}</div>
@@ -1606,12 +1770,19 @@ function renderBudgets(){
         <button class="budget-action-btn danger" onclick="deleteBudget('${b.id}')">🗑️ Eliminar</button>
       </div>
     </div>`;
-  }).join('');
+  };
+  const sec=t=>`<div class="form-label" style="margin:14px 15px 6px;">${t}</div>`;
+  const normal=items.filter(x=>x.c.inHero),acc=items.filter(x=>!x.c.inHero);
+  list.innerHTML=acc.length
+    ?(normal.length?sec('Mensuales — '+getPeriodLabel())+normal.map(card).join(''):'')+sec('Anuales — acumulado hasta '+getPeriodLabel())+acc.map(card).join('')
+    :normal.map(card).join('');
   document.getElementById('budgetUsed').textContent=fmt(tU,dc);
   document.getElementById('budgetTotal').textContent='/ '+fmt(tL,dc);
   const p=tL>0?Math.min(tU/tL*100,100):0;
   document.getElementById('budgetHeroFill').style.width=p+'%';
-  document.getElementById('budgetHeroPct').textContent=`${Math.round(p)}% del presupuesto total utilizado`;
+  document.getElementById('budgetHeroPct').textContent=
+    (tL>0?`${Math.round(p)}% del presupuesto ${v.type==='year'?'del año':'mensual'} utilizado`:'Sin presupuestos mensuales en este período')
+    +(acc.length&&v.type==='month'?' · los anuales se ven acumulados abajo':'');
 }
 
 function openBudgetModal(id=null){
@@ -1773,7 +1944,7 @@ function updateWealth(){
   // Cashflow bar chart
   const allM=[...new Set(state.transactions.map(t=>mk(t.date)))].sort();
   const iA=[],eA=[],nA=[];
-  allM.forEach(m=>{let i=0,e=0;state.transactions.forEach(tx=>{if(mk(tx.date)!==m)return;const v=toDisp(tx.amount,tx.currency);if(tx.type==='income')i+=v;else e+=v;});iA.push(i);eA.push(e);nA.push(i-e);});
+  allM.forEach(m=>{let i=0,e=0;state.transactions.forEach(tx=>{if(mk(tx.date)!==m||isTransfer(tx))return;const v=toDisp(tx.amount,tx.currency);if(tx.type==='income')i+=v;else e+=v;});iA.push(i);eA.push(e);nA.push(i-e);});
   destroyChart('chartCashflow');
   if(allM.length){const ctx2=document.getElementById('chartCashflow').getContext('2d');
     charts['chartCashflow']=new Chart(ctx2,{type:'bar',
@@ -2011,6 +2182,7 @@ function closeImportSheet(){ document.getElementById('importOverlay').classList.
 
 function resetImportSheet(){
   importRawRows=[]; importHeaders=[]; importParsedRows=[];
+  const rp=document.getElementById('importReplace'); if(rp) rp.checked=false;
   document.getElementById('importColMapSection').style.display='none';
   document.getElementById('importPreviewSection').style.display='none';
   document.getElementById('importFileInput').value='';
@@ -2161,6 +2333,16 @@ function normalizeCategory(val, type){
   return v||'Otros';
 }
 
+// Lee montos con punto o coma decimal: 125297.93 · 125297,93 · 125.297,93 · 1,125,297.93 · 5.660.800
+function parseAmount(raw){
+  let v=String(raw==null?'':raw).replace(/[^\d.,\-]/g,'');
+  if(!/\d/.test(v))return NaN;
+  const lc=v.lastIndexOf(','),ld=v.lastIndexOf('.');
+  if(lc>-1&&ld>-1){ v=lc>ld?v.replace(/\./g,'').replace(',','.'):v.replace(/,/g,''); }
+  else if(lc>-1){ const p=v.split(','); v=(p.length===2&&p[1].length!==3)?p[0]+'.'+p[1]:v.replace(/,/g,''); }
+  else if(ld>-1){ const p=v.split('.'); if(p.length>2||(p[1].length===3&&p[0].replace('-','').length<=3&&p[0].replace('-','')!=='0'))v=v.replace(/\./g,''); }
+  return parseFloat(v);
+}
 function previewImport(){
   const required=['mapTipo','mapMonto','mapFecha','mapCat'];
   for(const r of required){
@@ -2176,8 +2358,7 @@ function previewImport(){
   const tbody=document.getElementById('importPreviewBody');
   tbody.innerHTML=importRawRows.map((row,i)=>{
     const tipo=normalizeType(getColVal(row,'mapTipo'));
-    const montoRaw=getColVal(row,'mapMonto').replace(/[$ ,]/g,'').replace(',','.');
-    const monto=parseFloat(montoRaw);
+    const monto=parseAmount(getColVal(row,'mapMonto'));
     const fecha=normalizeDate(getColVal(row,'mapFecha'));
     const moneda=normalizeCurrency(getColVal(row,'mapMoneda')||'ARS');
     const catRaw=getColVal(row,'mapCat');
@@ -2221,6 +2402,9 @@ function previewImport(){
 // ── Confirm import ──
 function confirmImport(){
   if(!importParsedRows.length) return;
+  const repEl=document.getElementById('importReplace');
+  const replace=!!(repEl&&repEl.checked);
+  if(replace&&!confirm(`Se van a reemplazar tus ${state.transactions.length} movimientos actuales por los ${importParsedRows.length} del archivo. No se tocan presupuestos, programados ni inversiones. ¿Continuar?`))return;
   // Add new categories if needed
   importParsedRows.forEach(tx=>{
     const cats=state.categories[tx.type];
@@ -2231,10 +2415,11 @@ function confirmImport(){
     // Add tags to global list
     tx.tags.forEach(t=>{if(!state.tags.includes(t))state.tags.push(t);});
   });
+  if(replace)state.transactions=[];
   state.transactions.push(...importParsedRows);
   state.transactions.sort((a,b)=>b.date.localeCompare(a.date));
   saveState(); closeImportSheet(); updateAll();
-  alert(`✅ Se importaron ${importParsedRows.length} movimientos correctamente.`);
+  alert(`✅ Se importaron ${importParsedRows.length} movimientos correctamente${replace?' (reemplazaron a los anteriores)':''}.`);
 }
 
 // ── Export CSV ──
@@ -2355,35 +2540,60 @@ function getRecNextDate(rec){
   return null;
 }
 
+function localISO(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+// Registra los programados automáticos que ya vencieron, incluso de meses en que no abriste la app.
+// Respeta los meses omitidos y no vuelve a crear los que ya existen.
+function processRecurring(){
+  const now=new Date(),todayIso=localISO(now);
+  let last=state.recurringProcessed;
+  if(!last)last=localISO(new Date(now.getFullYear(),now.getMonth(),0));
+  let changed=false;
+  (state.recurring||[]).filter(r=>r.autoRegister).forEach(rec=>{
+    const freqM=FREQ_MONTHS[rec.freq]||1;
+    const cs=String(rec.createdAt||todayIso);
+    const createdIdx=parseInt(cs.slice(0,4))*12+parseInt(cs.slice(5,7))-1;
+    const skipped=rec.skipped||[];
+    let y=parseInt(last.slice(0,4)),m=parseInt(last.slice(5,7))-1;
+    while(y<now.getFullYear()||(y===now.getFullYear()&&m<=now.getMonth())){
+      const diff=y*12+m-createdIdx;
+      if(diff>=0&&diff%freqM===0){
+        const key=`${y}-${String(m+1).padStart(2,'0')}`;
+        const lastDay=new Date(y,m+1,0).getDate();
+        const date=`${key}-${String(Math.min(rec.day,lastDay)).padStart(2,'0')}`;
+        if(date>last&&date<=todayIso&&!skipped.includes(key)&&!state.transactions.some(tx=>tx.recurringId===rec.id&&mk(tx.date)===key)){
+          state.transactions.push({id:Date.now()+Math.random(),recurringId:rec.id,type:rec.type,amount:rec.amount,currency:rec.currency,
+            description:rec.desc+' 🔁',category:rec.category,date,tags:['programado'],notes:rec.notes||''});
+          changed=true;
+        }
+      }
+      m++;if(m>11){m=0;y++;}
+    }
+  });
+  const marker=state.recurringProcessed!==todayIso;
+  state.recurringProcessed=todayIso;
+  if(changed)state.transactions.sort((a,b)=>b.date.localeCompare(a.date));
+  if(changed||marker)saveState();
+  return changed;
+}
+function skipRecMonth(id){
+  const rec=state.recurring.find(r=>r.id===id);if(!rec)return;
+  const now=new Date(),key=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  rec.skipped=[...new Set([...(rec.skipped||[]),key])];
+  saveState();renderRecurring();
+}
+function unskipRecMonth(id){
+  const rec=state.recurring.find(r=>r.id===id);if(!rec)return;
+  const now=new Date(),key=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  rec.skipped=(rec.skipped||[]).filter(k=>k!==key);
+  saveState();renderRecurring();
+}
 function renderRecurring(){
   if(!state.recurring) return;
   const dc=state.displayCurrency;
   const now=new Date();
   const thisMonth=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
 
-  // Auto-register: add as real transaction when day has passed
-  state.recurring.filter(r=>r.autoRegister).forEach(rec=>{
-    const freqM=FREQ_MONTHS[rec.freq]||1;
-    const created=new Date(rec.createdAt||now);
-    const diff=(now.getFullYear()-created.getFullYear())*12+(now.getMonth()-created.getMonth());
-    if(diff%freqM!==0) return;
-    const alreadyDone=state.transactions.some(tx=>tx.recurringId===rec.id&&mk(tx.date)===thisMonth);
-    if(!alreadyDone&&now.getDate()>=rec.day){
-      const lastDay=new Date(now.getFullYear(),now.getMonth()+1,0).getDate();
-      const d=String(Math.min(rec.day,lastDay)).padStart(2,'0');
-      const m=String(now.getMonth()+1).padStart(2,'0');
-      state.transactions.push({
-        id:Date.now()+Math.random(),recurringId:rec.id,
-        type:rec.type,amount:rec.amount,currency:rec.currency,
-        description:rec.desc+' 🔁',category:rec.category,
-        date:`${now.getFullYear()}-${m}-${d}`,
-        tags:['programado'],notes:rec.notes||''
-      });
-      state.transactions.sort((a,b)=>b.date.localeCompare(a.date));
-      saveState();
-    }
-  });
-
+  if(processRecurring()){updateHero();renderRecords();}
   // Pending (manual, not yet registered this month)
   const due=state.recurring.filter(rec=>{
     if(rec.autoRegister) return false;
@@ -2391,6 +2601,7 @@ function renderRecurring(){
     const created=new Date(rec.createdAt||now);
     const diff=(now.getFullYear()-created.getFullYear())*12+(now.getMonth()-created.getMonth());
     if(diff%freqM!==0) return false;
+    if((rec.skipped||[]).includes(thisMonth)) return false;
     return !state.transactions.some(tx=>tx.recurringId===rec.id&&mk(tx.date)===thisMonth);
   });
 
@@ -2410,6 +2621,7 @@ function renderRecurring(){
         <div class="rec-right">
           <div class="rec-amount ${rec.type}">${rec.type==='expense'?'-':'+'}${fmt(toDisp(rec.amount,rec.currency),dc)}</div>
           <button onclick="event.stopPropagation();registerNow('${rec.id}')" style="margin-top:6px;background:var(--accent);color:#fff;border:none;border-radius:8px;padding:5px 12px;font-size:10px;font-weight:700;cursor:pointer;font-family:'Poppins',sans-serif;">✓ Registrar</button>
+          <button onclick="event.stopPropagation();skipRecMonth('${rec.id}')" style="margin-top:4px;background:var(--bg);color:var(--text2);border:1.5px solid var(--border);border-radius:8px;padding:4px 10px;font-size:10px;font-weight:700;cursor:pointer;font-family:'Poppins',sans-serif;">⏭️ Omitir mes</button>
         </div>
       </div>`;
     }).join('');
@@ -2426,6 +2638,7 @@ function renderRecurring(){
     const nextDate=getRecNextDate(rec);
     const nextStr=nextDate?`${String(nextDate.getDate()).padStart(2,'0')}/${String(nextDate.getMonth()+1).padStart(2,'0')}/${nextDate.getFullYear()}`:'—';
     const alreadyThisMonth=state.transactions.some(tx=>tx.recurringId===rec.id&&mk(tx.date)===thisMonth);
+    const skippedThisMonth=(rec.skipped||[]).includes(thisMonth);
     return`<div class="rec-card" onclick="openRecModal('${rec.id}')">
       <div class="rec-icon" style="background:${cat.color}1A;">${cat.emoji}</div>
       <div class="rec-info">
@@ -2436,7 +2649,9 @@ function renderRecurring(){
       <div class="rec-right">
         <div class="rec-amount ${rec.type}">${rec.type==='expense'?'-':'+'}${fmt(toDisp(rec.amount,rec.currency),dc)}</div>
         <div class="rec-next">Próx: ${nextStr}</div>
-        ${alreadyThisMonth?'<span class="rec-status-badge ok">✓ Registrado</span>':''}
+        ${alreadyThisMonth?'<span class="rec-status-badge ok">✓ Registrado</span>'
+          :skippedThisMonth?`<span class="rec-status-badge upcoming">⏭️ Omitido este mes</span><button onclick="event.stopPropagation();unskipRecMonth('${rec.id}')" style="display:block;margin:4px 0 0 auto;background:none;border:none;color:var(--accent);font-size:10px;font-weight:800;cursor:pointer;font-family:'Poppins',sans-serif;">Restaurar</button>`
+          :`<button onclick="event.stopPropagation();skipRecMonth('${rec.id}')" style="display:block;margin:4px 0 0 auto;background:var(--bg);color:var(--text2);border:1.5px solid var(--border);border-radius:8px;padding:3px 9px;font-size:9px;font-weight:700;cursor:pointer;font-family:'Poppins',sans-serif;">⏭️ Omitir este mes</button>`}
       </div>
     </div>`;
   }).join('');
@@ -2482,7 +2697,7 @@ let wealthView='main',invDetailId=null,invEditId=null,invEntryKind='aporte',invE
 
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function invNewId(){return 'i'+Date.now().toString(36)+Math.random().toString(36).slice(2,8);}
-function invToday(){return new Date().toISOString().split('T')[0];}
+function invToday(){return localISO(new Date());}
 function invGet(id){return (state.investments||[]).find(h=>h.id===id);}
 function invNum(n){return Math.round((n+Number.EPSILON)*100)/100;}
 function fmtDate(d){if(!d)return'';const[y,m,dd]=d.split('-');return `${dd}/${m}/${y}`;}
@@ -2561,7 +2776,7 @@ function renderInvestments(){
   }
 
   // Lista agrupada por plataforma
-  document.getElementById('invBulkBtn').style.display=hs.length?'block':'none';
+  document.getElementById('invBtnRow').style.display=hs.length?'flex':'none';
   const list=document.getElementById('invList');
   if(!hs.length){
     list.innerHTML='<div class="empty-state"><div class="icon">📈</div><p>Todavía no cargaste inversiones.<br>Agregá un FCI, un ETF, una acción o una obligación<br>y seguí cuánto ganás.</p></div>';
@@ -2615,7 +2830,7 @@ function openInvModal(id){
 function closeInvModal(){document.getElementById('invOverlay').classList.remove('open');invEditId=null;}
 function invMakeTx(h,kind,amount,date){
   const tx={id:Date.now()+Math.random(),type:kind==='aporte'?'expense':'income',amount,currency:h.currency,
-    description:(kind==='aporte'?'Aporte a ':'Retiro de ')+h.name,category:kind==='aporte'?'Inversión':'Inversiones',
+    description:(kind==='aporte'?'Aporte a ':'Retiro de ')+h.name,category:kind==='aporte'?INV_OUT_CAT:INV_IN_CAT,
     date,tags:['inversión'],notes:h.platform||''};
   if(!state.tags.includes('inversión'))state.tags.push('inversión');
   state.transactions.push(tx);state.transactions.sort((a,b)=>b.date.localeCompare(a.date));
@@ -2717,8 +2932,11 @@ function delInvEntry(hid,eid){
   const h=invGet(hid);if(!h)return;
   const e=(h.entries||[]).find(x=>x.id===eid);if(!e)return;
   const hasTx=e.txId!==undefined&&state.transactions.some(t=>t.id===e.txId);
-  if(!confirm('¿Eliminar este movimiento?'+(hasTx?'\nTambién se borra el gasto/ingreso que se registró con él.':'')))return;
-  if(hasTx)state.transactions=state.transactions.filter(t=>t.id!==e.txId);
+  if(!confirm('¿Eliminar este movimiento?'+(hasTx?'\nTambién se descuenta del gasto/ingreso que se registró con él.':'')))return;
+  if(hasTx){
+    if(e.txPart){const tx=state.transactions.find(t=>t.id===e.txId);tx.amount=Math.round((tx.amount-e.amount)*100)/100;if(tx.amount<=0.005)state.transactions=state.transactions.filter(t=>t.id!==e.txId);}
+    else state.transactions=state.transactions.filter(t=>t.id!==e.txId);
+  }
   h.entries=h.entries.filter(x=>x.id!==eid);
   saveState();updateAll();renderInvDetail();
 }
@@ -2744,8 +2962,8 @@ function setInvEntryKind(k){
   const row=document.getElementById('invEntryTxRow');
   row.style.display=k==='valor'?'none':'flex';
   document.getElementById('invEntryTxLabel').textContent=k==='aporte'
-    ?'Registrar también como gasto «Inversión» (sale de mi dinero disponible)'
-    :'Registrar también como ingreso (vuelve a mi dinero disponible)';
+    ?'Registrar también como «Inversión» (baja mi dinero disponible, no cuenta como gasto)'
+    :'Registrar también como «Rescate de inversión» (vuelve a mi dinero disponible, no cuenta como ingreso)';
 }
 function saveInvEntry(){
   const h=invGet(invEntryHid);if(!h)return;
@@ -2784,6 +3002,65 @@ function saveInvBulk(){
   });
   if(!n){closeInvBulk();return;}
   saveState();closeInvBulk();updateAll();
+}
+
+// ── Aporte repartido entre varios activos ──
+let invMultiCombos=[];
+function openInvMulti(){
+  const m=new Map();
+  (state.investments||[]).forEach(h=>{const p=(h.platform||'').trim()||'Sin plataforma';const k=p+'|'+h.currency;if(!m.has(k))m.set(k,{p,cur:h.currency,items:[]});m.get(k).items.push(h);});
+  invMultiCombos=[...m.values()];
+  if(!invMultiCombos.length)return;
+  document.getElementById('invMultiSel').innerHTML=invMultiCombos.map((c,i)=>`<option value="${i}">${esc(c.p)} (${c.cur})</option>`).join('');
+  document.getElementById('invMultiDate').value=invToday();
+  document.getElementById('invMultiTotalIn').value='';
+  document.getElementById('invMultiTx').checked=true;
+  renderInvMultiRows();
+  document.getElementById('invMultiOverlay').classList.add('open');
+}
+function closeInvMulti(){document.getElementById('invMultiOverlay').classList.remove('open');}
+function renderInvMultiRows(){
+  const c=invMultiCombos[parseInt(document.getElementById('invMultiSel').value)||0];if(!c)return;
+  const items=[...c.items].sort((a,b)=>(b.targetPct||0)-(a.targetPct||0)||a.name.localeCompare(b.name));
+  document.getElementById('invMultiRows').innerHTML=items.map(h=>{
+    const t=INV_TYPES[h.type]||INV_TYPES.otro;
+    return `<div class="inv-bulk-row"><div class="inv-info"><div class="inv-name">${t.emoji} ${esc(h.name)}</div><div class="inv-sub">${h.targetPct!=null?'objetivo '+h.targetPct+'%':'sin objetivo'}</div></div>
+      <input class="form-control inv-multi-in" style="width:118px;" type="number" inputmode="decimal" step="any" min="0" data-id="${h.id}" placeholder="0" oninput="invMultiSum()"></div>`;}).join('');
+  invMultiSum();
+}
+function invMultiSum(){
+  const c=invMultiCombos[parseInt(document.getElementById('invMultiSel').value)||0];if(!c)return;
+  let s=0;document.querySelectorAll('.inv-multi-in').forEach(i=>{const v=parseFloat(i.value);if(isFinite(v)&&v>0)s+=v;});
+  document.getElementById('invMultiSum').textContent='Total: '+fmt(s,c.cur);
+}
+function invMultiSplit(){
+  const total=parseFloat(document.getElementById('invMultiTotalIn').value);
+  if(!isFinite(total)||total<=0){alert('Primero ingresá el total a invertir.');return;}
+  const c=invMultiCombos[parseInt(document.getElementById('invMultiSel').value)||0];
+  const withT=c.items.filter(h=>h.targetPct!=null&&h.targetPct>0);
+  if(!withT.length){alert('Ninguna inversión de esta plataforma tiene objetivo %. Podés cargarlo al editar cada una.');return;}
+  const sum=withT.reduce((a,h)=>a+h.targetPct,0);
+  document.querySelectorAll('.inv-multi-in').forEach(i=>{
+    const h=withT.find(x=>x.id===i.dataset.id);
+    i.value=h?(Math.round(total*h.targetPct/sum*100)/100):'';
+  });
+  invMultiSum();
+}
+function saveInvMulti(){
+  const c=invMultiCombos[parseInt(document.getElementById('invMultiSel').value)||0];if(!c)return;
+  const date=document.getElementById('invMultiDate').value||invToday();
+  const parts=[];
+  document.querySelectorAll('.inv-multi-in').forEach(i=>{const v=parseFloat(i.value);const h=invGet(i.dataset.id);if(h&&isFinite(v)&&v>0)parts.push({h,v});});
+  if(!parts.length){alert('Cargá al menos un monto.');return;}
+  const total=parts.reduce((a,p)=>a+p.v,0);
+  let txId;
+  if(document.getElementById('invMultiTx').checked){
+    const tx={id:Date.now()+Math.random(),type:'expense',amount:Math.round(total*100)/100,currency:c.cur,description:'Aporte a '+c.p,category:'Inversión',date,tags:['inversión'],notes:parts.map(p=>p.h.name).join(', ').slice(0,60)};
+    if(!state.tags.includes('inversión'))state.tags.push('inversión');
+    state.transactions.push(tx);state.transactions.sort((a,b)=>b.date.localeCompare(a.date));txId=tx.id;
+  }
+  parts.forEach(p=>{const e={id:invNewId(),date,kind:'aporte',amount:p.v};if(txId!==undefined){e.txId=txId;e.txPart=true;}p.h.entries.push(e);});
+  saveState();closeInvMulti();updateAll();
 }
 
 // ── Exportar / importar inversiones (JSON) ──
@@ -2829,7 +3106,10 @@ function importInvestmentsFile(ev){
 // INIT
 // ══════════════════════════════════════════
 loadState();
+processRecurring();
+syncPeriodTabs();
 updateAll();
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&processRecurring())updateAll();});
 fetchMEP();
 setInterval(fetchMEP, 5*60*1000);
 // REGISTRO DEL SERVICE WORKER
