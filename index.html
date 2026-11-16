@@ -1258,6 +1258,7 @@ const DEFAULT_CATS = {
     {name:'Mascotas',       emoji:'🐾',color:'#8B5CF6'},
     {name:'Impuestos',      emoji:'🧾',color:'#6B7280'},
     {name:'Inversión',      emoji:'📈',color:'#10C98A'},
+    {name:'Ajuste de saldo', emoji:'⚖️',color:'#94A3B8'},
     {name:'Suscripciones',  emoji:'📱',color:'#2563EB'},
     {name:'Trabajo',        emoji:'💼',color:'#475569'},
     {name:'Otros',          emoji:'📦',color:'#94A3B8'},
@@ -1271,6 +1272,8 @@ const DEFAULT_CATS = {
     {name:'Ingreso extra',  emoji:'⭐',color:'#FF8C42'},
     {name:'Viajes',         emoji:'✈️',color:'#00B4D8'},
     {name:'Rescate de inversión',emoji:'↩️',color:'#6C63FF'},
+    {name:'Saldo inicial',  emoji:'🏁',color:'#0DC98A'},
+    {name:'Ajuste de saldo', emoji:'⚖️',color:'#94A3B8'},
     {name:'Regalo',         emoji:'🎁',color:'#A855F7'},
     {name:'Otros',          emoji:'📦',color:'#94A3B8'},
   ]
@@ -1292,7 +1295,10 @@ let state={
 // Aportes y rescates de inversión: pasan plata entre "dinero" e "inversiones".
 // Bajan/suben el dinero disponible pero NO son un gasto ni un ingreso real.
 const INV_OUT_CAT='Inversión',INV_IN_CAT='Rescate de inversión';
-function isTransfer(tx){return !!tx&&((tx.type==='expense'&&tx.category===INV_OUT_CAT)||(tx.type==='income'&&tx.category===INV_IN_CAT));}
+function isInvTransfer(tx){return !!tx&&((tx.type==='expense'&&tx.category===INV_OUT_CAT)||(tx.type==='income'&&tx.category===INV_IN_CAT));}
+// «Saldo inicial» y «Ajuste de saldo» corrigen tu Dinero pero no son ingresos ni gastos reales
+function isAdjust(tx){return !!tx&&(tx.category==='Saldo inicial'||tx.category==='Ajuste de saldo');}
+function isTransfer(tx){return isInvTransfer(tx)||isAdjust(tx);}
 let currentTxType='expense',currentTxTags=[],selectedCat=null;
 let txFilter='all',contentTab='records',currentPage='movements';
 let txSearch='',txCats=[],txTags=[],txCatOpts=[],txTagOpts=[],txAllTime=false,txPanelOpen=false;
@@ -1309,6 +1315,10 @@ function loadState(){
 }
 // Una sola vez por dispositivo: suma las categorías/etiquetas nuevas por defecto y las que ya usás en tus movimientos
 function migrateDefaults(){
+  if(!state.migratedV6&&state.migratedV5){
+    ['expense','income'].forEach(type=>DEFAULT_CATS[type].filter(d=>d.name==='Saldo inicial'||d.name==='Ajuste de saldo').forEach(d=>{if(!state.categories[type].some(c=>c.name===d.name))state.categories[type].push({...d});}));
+    state.migratedV6=true;try{localStorage.setItem('fundida_v4',JSON.stringify(state));}catch(e){}
+  }
   if(state.migratedV5)return;
   const pal=['#FF4D6D','#FF8C42','#F59E0B','#0DC98A','#6C63FF','#00B4D8','#A855F7','#14B8A6'];
   ['expense','income'].forEach(type=>{
@@ -1319,7 +1329,7 @@ function migrateDefaults(){
   const tg=state.tags;
   JSON.parse(JSON.stringify(DEFAULT_TAGS)).forEach(t=>{if(!tg.includes(t))tg.push(t);});
   state.transactions.forEach(tx=>(tx.tags||[]).forEach(t=>{if(t&&!tg.includes(t))tg.push(t);}));
-  state.migratedV5=true;
+  state.migratedV5=true;state.migratedV6=true;
   try{localStorage.setItem('fundida_v4',JSON.stringify(state));}catch(e){}
 }
 function saveState(){try{localStorage.setItem('fundida_v4',JSON.stringify(state));}catch(e){}}
@@ -1633,7 +1643,7 @@ function updateHero(){
   const periodTxs=filterByPeriod(state.transactions);
   const dc=state.displayCurrency;
   let inc=0,exp=0,inv=0;
-  periodTxs.forEach(tx=>{const v=toDisp(tx.amount,tx.currency);if(isTransfer(tx)){inv+=tx.type==='expense'?v:-v;return;}if(tx.type==='income')inc+=v;else exp+=v;});
+  periodTxs.forEach(tx=>{const v=toDisp(tx.amount,tx.currency);if(isAdjust(tx))return;if(isInvTransfer(tx)){inv+=tx.type==='expense'?v:-v;return;}if(tx.type==='income')inc+=v;else exp+=v;});
   const hi=document.getElementById('heroInvest');
   if(hi){hi.style.display=Math.abs(inv)>0.5?'block':'none';hi.textContent=(inv>=0?'📈 Aportado a inversiones: ':'📈 Rescatado de inversiones: ')+fmt(Math.abs(inv),dc)+' · no cuenta como gasto';}
   document.getElementById('heroIncome').textContent=fmt(inc,dc);
