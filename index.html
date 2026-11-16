@@ -1289,7 +1289,7 @@ let state={
   transactions:[],budgets:[],recurring:[],investments:[],
   categories:JSON.parse(JSON.stringify(DEFAULT_CATS)),
   tags:['Sociales','Trabajo','Ups','Necesario','Extraordinario','Gasto hormiga','programado','inversión','Broker','Banco','Billetera virtual','personal','familia','fijo','variable','deducible','urgente'],
-  mepRate:1200,displayCurrency:'ARS',
+  mepRate:1580,displayCurrency:'ARS',
   periodType:'month',periodOffset:0,budgetPeriodType:'month',budgetPeriodOffset:0,
 };
 // Aportes y rescates de inversión: pasan plata entre "dinero" e "inversiones".
@@ -1309,6 +1309,7 @@ let deferredInstallPrompt=null;
 function loadState(){
   try{const s=localStorage.getItem('fundida_v4');if(s)state={...state,...JSON.parse(s)};}catch(e){}
   if(!Array.isArray(state.investments))state.investments=[];
+  if(state.mepRate===1200)state.mepRate=1580;
   if(!Array.isArray(state.platforms))state.platforms=[];
   state.investments.forEach(h=>{const n=(h.platform||'').trim();if(n&&!state.platforms.some(p=>p.name===n))state.platforms.push({name:n,wallet:h.type==='billetera'});});
   migrateDefaults();
@@ -1347,16 +1348,18 @@ async function fetchMEP(){
     return parse(await r.json());
   };
 
+  // Precio de COMPRA del dólar MEP (lo que te pagan si vendés). Orden: Ámbito, después DolarApi (dólar bolsa).
+  const num=v=>{if(typeof v==='number')return v;v=String(v||'').trim();
+    return v.includes(',')?parseFloat(v.replace(/\./g,'').replace(',','.')):parseFloat(v);};
   const apis=[
-    ['https://dolarapi.com/v1/dolares/bolsa',     d=>d.venta],
-    ['https://api.bluelytics.com.ar/v2/latest',   d=>d.blue?.value_sell],
-    ['https://mercados.ambito.com/dolarrava/mep/variacion', d=>parseFloat((d.venta||'').replace(',','.'))],
+    ['https://mercados.ambito.com/dolarrava/mep/variacion', d=>num(d.compra)],
+    ['https://dolarapi.com/v1/dolares/bolsa',               d=>num(d.compra)],
   ];
 
   for(const [url,parse] of apis){
     try{
       const rate=await tryApi(url,parse);
-      if(rate>0){
+      if(rate>500&&rate<10000){
         state.mepRate=rate;
         val.textContent='$'+Math.round(rate).toLocaleString('es-AR');
         dot.className='mep-dot';
