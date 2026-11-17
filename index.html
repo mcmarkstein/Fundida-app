@@ -178,6 +178,9 @@ body{display:flex;flex-direction:column;max-width:430px;margin:0 auto;min-height
 .cf-year-chevron.open{transform:rotate(90deg);}
 .cf-month-row td{padding:7px 0 7px 20px;border-bottom:1px solid var(--border);font-size:10px;background:rgba(108,99,255,.02);}
 .cf-month-row.hidden{display:none;}
+.cf-table tr.has-sub td{border-bottom:none;padding-bottom:2px;}
+.cf-table tr.cf-sub td{padding:0 0 8px;font-size:9px;font-weight:600;color:var(--text2);line-height:1.5;border-bottom:1px solid var(--border);}
+.cf-table tr.cf-month-row.cf-sub td{padding:0 0 8px 20px;font-size:9px;}
 .cf-year-total-inc{font-size:11px;font-weight:700;color:var(--income);}
 .cf-year-total-exp{font-size:11px;font-weight:700;color:var(--expense);}
 .pill{display:inline-block;padding:2px 8px;border-radius:20px;font-size:9px;font-weight:700;}
@@ -598,7 +601,7 @@ body {
       </div>
       <div class="card">
         <div class="card-title">Flujo de Caja Mensual</div>
-        <div class="card-subtitle">Ingresos, gastos y neto por mes (sin aportes a inversión)</div>
+        <div class="card-subtitle">Ingresos, gastos y neto por mes · la línea punteada es lo que fue a inversión</div>
         <div class="chart-wrap-200"><canvas id="chartCashflow"></canvas></div>
       </div>
       <div class="card">
@@ -2006,15 +2009,20 @@ function updateWealth(){
 
   // Cashflow bar chart
   const allM=[...new Set(state.transactions.map(t=>mk(t.date)))].sort();
-  const iA=[],eA=[],nA=[];
-  allM.forEach(m=>{let i=0,e=0;state.transactions.forEach(tx=>{if(mk(tx.date)!==m||isTransfer(tx))return;const v=toDisp(tx.amount,tx.currency);if(tx.type==='income')i+=v;else e+=v;});iA.push(i);eA.push(e);nA.push(i-e);});
+  const iA=[],eA=[],nA=[],invA=[],iniA=[],adjA=[];
+  allM.forEach(m=>{let i=0,e=0,inv=0,ini=0,adj=0;state.transactions.forEach(tx=>{if(mk(tx.date)!==m)return;const v=toDisp(tx.amount,tx.currency);
+    if(isInvTransfer(tx)){inv+=tx.type==='expense'?v:-v;return;}
+    if(isAdjust(tx)){if(tx.category==='Saldo inicial')ini+=tx.type==='income'?v:-v;else adj+=tx.type==='income'?v:-v;return;}
+    if(tx.type==='income')i+=v;else e+=v;});
+    iA.push(i);eA.push(e);nA.push(i-e);invA.push(inv);iniA.push(ini);adjA.push(adj);});
   destroyChart('chartCashflow');
   if(allM.length){const ctx2=document.getElementById('chartCashflow').getContext('2d');
     charts['chartCashflow']=new Chart(ctx2,{type:'bar',
       data:{labels:allM.map(mlbl),datasets:[
         {label:'Ingresos',data:iA,backgroundColor:'#0DC98A',borderRadius:5,borderSkipped:false,order:2},
         {label:'Gastos',data:eA,backgroundColor:'#FF4D6D',borderRadius:5,borderSkipped:false,order:3},
-        {label:'Neto',data:nA,type:'line',borderColor:'#6C63FF',backgroundColor:'transparent',tension:.35,pointRadius:0,pointHoverRadius:4,borderWidth:2,order:1}
+        {label:'Neto',data:nA,type:'line',borderColor:'#6C63FF',backgroundColor:'transparent',tension:.35,pointRadius:0,pointHoverRadius:4,borderWidth:2,order:1},
+        {label:'A inversión',data:invA,type:'line',borderColor:'#00B4D8',backgroundColor:'transparent',borderDash:[4,3],tension:.35,pointRadius:0,pointHoverRadius:4,borderWidth:2,order:0}
       ]},
       options:{...chartOpts(),
         plugins:{...chartOpts().plugins,legend:{display:true,labels:{color:'#6B7280',font:{family:'Poppins',size:9},boxWidth:8}}},
@@ -2027,16 +2035,16 @@ function updateWealth(){
   }
 
   // History table — collapsible by year
-  renderCfTable(allM, iA, eA, dc);
+  renderCfTable(allM, iA, eA, dc, invA, iniA, adjA);
 }
 
-function renderCfTable(allM, iA, eA, dc){
+function renderCfTable(allM, iA, eA, dc, invA, iniA, adjA){
   // Group months by year
   const yearMap = {};
   allM.forEach((m, idx) => {
     const yr = m.substring(0, 4);
     if(!yearMap[yr]) yearMap[yr] = [];
-    yearMap[yr].push({ m, i: iA[idx], e: eA[idx] });
+    yearMap[yr].push({ m, i: iA[idx], e: eA[idx], inv: invA[idx], ini: iniA[idx], adj: adjA[idx] });
   });
 
   const years = Object.keys(yearMap).sort().reverse();
@@ -2047,9 +2055,10 @@ function renderCfTable(allM, iA, eA, dc){
     const yI = months.reduce((s, x) => s + x.i, 0);
     const yE = months.reduce((s, x) => s + x.e, 0);
     const yNet = yI - yE;
+    const ySub = cfSub(months.reduce((s,x)=>s+x.inv,0), months.reduce((s,x)=>s+x.ini,0), months.reduce((s,x)=>s+x.adj,0), dc);
     const isCurrentYear = yr === String(new Date().getFullYear());
 
-    rows += `<tr class="cf-year-row" onclick="toggleCfYear('${yr}')">
+    rows += `<tr class="cf-year-row${ySub?' has-sub':''}" onclick="toggleCfYear('${yr}')">
       <td>
         <div class="cf-year-label">
           <span class="cf-year-chevron${isCurrentYear?' open':''}" id="cfchev-${yr}">›</span>
@@ -2060,21 +2069,32 @@ function renderCfTable(allM, iA, eA, dc){
       <td class="cf-year-total-exp">-${fmt(yE, dc)}</td>
       <td><span class="pill ${yNet>=0?'pos':'neg'}">${yNet>=0?'+':''}${fmt(yNet, dc)}</span></td>
     </tr>`;
+    if(ySub)rows += `<tr class="cf-sub"><td colspan="4">${ySub}</td></tr>`;
 
-    months.forEach(({ m, i, e }) => {
+    months.forEach(({ m, i, e, inv, ini, adj }) => {
       const net = i - e;
-      rows += `<tr class="cf-month-row${isCurrentYear?'':' hidden'}" data-year="${yr}">
+      const mSub = cfSub(inv, ini, adj, dc);
+      rows += `<tr class="cf-month-row${mSub?' has-sub':''}${isCurrentYear?'':' hidden'}" data-year="${yr}">
         <td style="font-weight:600;color:var(--text2);">${mlbl(m)}</td>
         <td style="color:var(--income);font-weight:700;">+${fmt(i, dc)}</td>
         <td style="color:var(--expense);font-weight:700;">-${fmt(e, dc)}</td>
         <td><span class="pill ${net>=0?'pos':'neg'}">${net>=0?'+':''}${fmt(net, dc)}</span></td>
       </tr>`;
+      if(mSub)rows += `<tr class="cf-month-row cf-sub${isCurrentYear?'':' hidden'}" data-year="${yr}"><td colspan="4">${mSub}</td></tr>`;
     });
   });
 
   document.getElementById('cfTableBody').innerHTML = rows;
 }
 
+// Texto chico bajo cada mes/año: lo que no es ingreso ni gasto pero sí es tu plata
+function cfSub(inv,ini,adj,dc){
+  const bits=[];
+  if(Math.abs(inv)>0.5)bits.push(inv>0?'📈 A inversión '+fmt(inv,dc):'📈 Rescatado '+fmt(-inv,dc));
+  if(Math.abs(ini)>0.5)bits.push('🏁 Saldo inicial '+fmt(ini,dc));
+  if(Math.abs(adj)>0.5)bits.push('⚖️ Ajuste '+(adj>0?'+':'-')+fmt(Math.abs(adj),dc));
+  return bits.join('  ·  ');
+}
 function toggleCfYear(yr){
   const rows = document.querySelectorAll(`.cf-month-row[data-year="${yr}"]`);
   const chev = document.getElementById(`cfchev-${yr}`);
